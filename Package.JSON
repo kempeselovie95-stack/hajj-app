@@ -1,0 +1,15 @@
+{
+  "name": "hajj-app",
+  "version": "1.0.0",
+  "description": "Application de gestion du Hajj - Cameroun",
+  "private": true,
+  "scripts": {
+    "backend": "node backend/server.js",
+    "web": "npm run dev --prefix web",
+    "mobile": "npm start --prefix mobile",
+    "dev": "concurrently \"npm run backend\" \"npm run web\""
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

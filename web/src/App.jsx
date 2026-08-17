@@ -4,6 +4,8 @@ import { AuthProvider, useAuth } from './contexts/AuthContext.jsx';
 import ProtectedRoute from './routes/ProtectedRoute.jsx';
 import AppShell from './components/layout/AppShell.jsx';
 import LoginPage from './pages/auth/LoginPage.jsx';
+import RegisterPage from './pages/auth/RegisterPage.jsx';
+import PelerinDashboardPage from './pages/pelerin/PelerinDashboardPage.jsx';
 import AdminDashboardPage from './pages/admin/AdminDashboardPage.jsx';
 import AdminDossiersListPage from './pages/admin/AdminDossiersListPage.jsx';
 import AgenceDashboardPage from './pages/agence/AgenceDashboardPage.jsx';
@@ -25,7 +27,14 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
-      {/* TODO(Phase 2) : /register — inscription agence si applicable */}
+      <Route path="/register" element={<RegisterPage />} />
+
+      {/* Espace pèlerin */}
+      <Route element={<ProtectedRoute allowedRoles={[ROLES.PELERIN]} />}>
+        <Route element={<AppShell />}>
+          <Route path="/dashboard" element={<PelerinDashboardPage />} />
+        </Route>
+      </Route>
 
       {/* Espace admin */}
       <Route element={<ProtectedRoute allowedRoles={[ROLES.ADMIN]} />}>

@@ -27,14 +27,17 @@ const PORT = process.env.PORT || 5000;
 app.use(helmet());
 
 // ── CORS — accepter les requêtes du web et du mobile (Expo) ──────────────────
+const allowedOrigins = (process.env.CORS_ORIGINS || process.env.CORS_ORIGIN || 'http://localhost:5173')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
 app.use(cors({
-  origin: [
-    process.env.CORS_ORIGIN || 'http://localhost:3000',
-    'http://localhost:3000',
-    'http://localhost:8081',
-    'http://localhost:19000',
-    'exp://localhost:19000',
-  ],
+  origin(origin, callback) {
+    // Les applications natives Expo n'envoient généralement pas d'Origin.
+    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error(`Origin non autorisée par CORS: ${origin}`));
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
 }));

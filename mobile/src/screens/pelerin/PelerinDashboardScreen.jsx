@@ -1,17 +1,32 @@
-import { View, Text, ScrollView, StyleSheet } from 'react-native';
+import { useEffect, useState } from 'react';
+import { View, Text, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
 import { DOSSIER_STATUS_LABELS, DOSSIER_STATUS_COLOR, THEME } from '@hajj/shared';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 import { FONTS } from '../../hooks/useAppFonts.js';
 import StatusBadge from '../../components/StatusBadge.jsx';
 import DossierTimeline from '../../components/DossierTimeline.jsx';
 import StatusHistoryTimeline from '../../components/StatusHistoryTimeline.jsx';
-import { MOCK_PELERIN_DOSSIER } from '../../mocks/mockDossier.js';
 
 export default function PelerinDashboardScreen() {
-  // TODO(intégration) : remplacer par api.dossiers.list({ pelerin_id: user.id })
-  // au montage de l'écran (useEffect + useState), avec un état de chargement.
-  const { user } = useAuth();
-  const dossier = MOCK_PELERIN_DOSSIER;
+  const { user, api } = useAuth();
+  const [dossier, setDossier] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    api.dossiers.list({ page: 1, limite: 1 })
+      .then((data) => {
+        if (mounted) setDossier(data.dossiers?.[0] || null);
+      })
+      .catch(() => {
+        if (mounted) setDossier(null);
+      })
+      .finally(() => {
+        if (mounted) setLoading(false);
+      });
+    return () => { mounted = false; };
+  }, [api]);
+
   const hasDossier = !!dossier?.numero_dossier;
 
   return (
@@ -24,7 +39,7 @@ export default function PelerinDashboardScreen() {
           <Text style={styles.cardTitle}>
             {hasDossier ? dossier.numero_dossier : 'Aucun dossier'}
           </Text>
-          {hasDossier && (
+          {hasDossier && dossier.historique && (
             <StatusBadge
               label={DOSSIER_STATUS_LABELS[dossier.statut]}
               semantic={DOSSIER_STATUS_COLOR[dossier.statut]}
@@ -32,7 +47,9 @@ export default function PelerinDashboardScreen() {
           )}
         </View>
 
-        {hasDossier ? (
+        {loading ? (
+          <ActivityIndicator color={THEME.colors.primary} />
+        ) : hasDossier ? (
           <DossierTimeline currentStatus={dossier.statut} />
         ) : (
           <Text style={styles.emptyText}>
@@ -41,7 +58,7 @@ export default function PelerinDashboardScreen() {
         )}
       </View>
 
-      {hasDossier && (
+      {hasDossier && dossier.historique && (
         <View style={[styles.card, styles.historyCard]}>
           <Text style={styles.historyTitle}>Historique</Text>
           <StatusHistoryTimeline entries={dossier.historique ?? []} />

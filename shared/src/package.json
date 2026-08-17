@@ -1,0 +1,14 @@
+{
+  "name": "@hajj/shared",
+  "version": "1.0.0",
+  "private": false,
+  "type": "module",
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js"
+  },
+  "description": "Constantes, types, validateurs et client API partagés entre web et mobile",
+  "dependencies": {
+    "axios": "^1.7.7"
+  }
+}

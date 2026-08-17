@@ -1,15 +1,18 @@
 {
   "name": "hajj-app",
-  "version": "1.0.0",
-  "description": "Application de gestion du Hajj - Cameroun",
   "private": true,
+  "version": "1.0.0",
+  "description": "Application de gestion de pèlerinage Hajj pour pèlerins et agences camerounaises",
+  "workspaces": [
+    "packages/shared",
+    "packages/backend",
+    "packages/web",
+    "packages/mobile"
+  ],
   "scripts": {
-    "backend": "node backend/server.js",
-    "web": "npm run dev --prefix web",
-    "mobile": "npm start --prefix mobile",
-    "dev": "concurrently \"npm run backend\" \"npm run web\""
-  },
-  "devDependencies": {
-    "concurrently": "^8.2.2"
+    "dev:backend": "npm run dev --workspace=packages/backend",
+    "dev:web": "npm run dev --workspace=packages/web",
+    "dev:mobile": "npm run start --workspace=packages/mobile",
+    "build:web": "npm run build --workspace=packages/web"
   }
 }

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useParams, Navigate } from 'react-router-dom';
 import {
   DOSSIER_STATUS_LABELS,
@@ -16,29 +16,47 @@ import DocumentChecklistItem from '../../components/dossiers/DocumentChecklistIt
 import DossierStatusSelect from '../../components/dossiers/DossierStatusSelect.jsx';
 import StatusHistoryTimeline from '../../components/dossiers/StatusHistoryTimeline.jsx';
 import { useAuth } from '../../contexts/AuthContext.jsx';
-import { findMockDossierById } from '../../mocks/mockDossiers.js';
 
 export default function DossierDetailPage() {
   const { id } = useParams();
-  const { user } = useAuth();
-
-  // TODO(intégration) : remplacer par un useEffect appelant
-  // api.dossiers.getById(id), avec un état de chargement/erreur 404 réel.
-  const initialDossier = findMockDossierById(id);
-  const [dossier, setDossier] = useState(initialDossier);
+  const { user, api } = useAuth();
+  const [dossier, setDossier] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
   const [rejectionTarget, setRejectionTarget] = useState(null); // { type, label } | null
   const [rejectionReason, setRejectionReason] = useState('');
 
-  if (!initialDossier) {
+  useEffect(() => {
+    let mounted = true;
+    api.dossiers.getById(id)
+      .then((data) => {
+        if (mounted) setDossier(normalizeDossier(data.dossier));
+      })
+      .catch((requestError) => {
+        if (mounted) setError(requestError.message || 'Dossier introuvable.');
+      })
+      .finally(() => {
+        if (mounted) setIsLoading(false);
+      });
+    return () => { mounted = false; };
+  }, [api, id]);
+
+  if (isLoading) {
+    return <p className="font-body text-sm text-text-secondary">Chargement du dossier…</p>;
+  }
+
+  if (error || !dossier) {
     return <Navigate to="/agence/dossiers" replace />;
   }
 
   const checklist = buildDocumentChecklist(dossier.documents);
   const progress = computeDocumentProgress(dossier.documents);
 
-  function updateDocumentStatus(type, statut, motif_rejet) {
-    // TODO(intégration) : appeler api.documents.validate(documentId) ou
-    // api.documents.reject(documentId, motif) puis rafraîchir le dossier.
+  async function updateDocumentStatus(type, statut, motif_rejet) {
+    const document = dossier.documents.find((item) => item.type === type);
+    if (!document?.id) return;
+    if (statut === DOCUMENT_STATUS.VALIDE) await api.documents.validate(document.id);
+    else await api.documents.reject(document.id, motif_rejet);
     setDossier((prev) => ({
       ...prev,
       documents: prev.documents.map((doc) =>
@@ -47,8 +65,8 @@ export default function DossierDetailPage() {
     }));
   }
 
-  function handleValidate(type) {
-    updateDocumentStatus(type, DOCUMENT_STATUS.VALIDE);
+  async function handleValidate(type) {
+    await updateDocumentStatus(type, DOCUMENT_STATUS.VALIDE);
   }
 
   function openRejectModal(type, label) {
@@ -56,16 +74,14 @@ export default function DossierDetailPage() {
     setRejectionTarget({ type, label });
   }
 
-  function confirmReject() {
-    updateDocumentStatus(rejectionTarget.type, DOCUMENT_STATUS.REJETE, rejectionReason);
+  async function confirmReject() {
+    await updateDocumentStatus(rejectionTarget.type, DOCUMENT_STATUS.REJETE, rejectionReason);
     setRejectionTarget(null);
   }
 
-  function handleStatusChange(nextStatus) {
+  async function handleStatusChange(nextStatus) {
     if (!canTransitionTo(dossier.statut, nextStatus)) return; // garde-fou silencieux, l'UI ne propose que le permis
-    // TODO(intégration) : appeler api.dossiers.updateStatus(dossier.id, nextStatus)
-    // — le backend devrait créer lui-même l'entrée historique_statuts ;
-    // on l'ajoute ici localement pour que la démo reste cohérente sans API.
+    await api.dossiers.updateStatus(dossier.id, nextStatus);
     const historyEntry = {
       id: Date.now(),
       ancien_statut: dossier.statut,
@@ -175,6 +191,19 @@ export default function DossierDetailPage() {
       </Modal>
     </div>
   );
+}
+
+function normalizeDossier(dossier) {
+  return {
+    ...dossier,
+    created_at: dossier.created_at ?? dossier.cree_le,
+    pelerin: dossier.pelerin ?? {
+      nom: dossier.nom ?? dossier.pelerin_nom?.split(' ').slice(1).join(' ') ?? '',
+      prenom: dossier.prenom ?? dossier.pelerin_nom?.split(' ')[0] ?? '',
+      telephone: dossier.telephone,
+    },
+    agence: dossier.agence ?? { nom: dossier.nom_agence ?? 'Non attribuée' },
+  };
 }
 
 function InfoLine({ label, value }) {

@@ -12,16 +12,18 @@ const morgan     = require('morgan');
 const rateLimit  = require('express-rate-limit');
 
 const { testConnection }  = require('./config/database');
-const { gererErreur }     = require('./middleware/errorHandler');
+const { gererErreur }     = require('./middleware/Errorhandler');
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 const authRoutes          = require('./routes/auth');
 const dossiersRoutes      = require('./routes/dossiers');
 const notificationsRoutes = require('./routes/notifications');
 const documentsRoutes = require('./routes/documents');
+const adminRoutes = require('./routes/admin');
+const groupsRoutes = require('./routes/groups');
 
 const app  = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 3000;
 
 // ── Sécurité & headers HTTP ───────────────────────────────────────────────────
 app.use(helmet());
@@ -85,6 +87,8 @@ app.use('/api/auth',          limiterAuth, authRoutes);
 app.use('/api/dossiers',      dossiersRoutes);
 app.use('/api/notifications', notificationsRoutes);
 app.use('/api/documents', documentsRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/groups', groupsRoutes);
 
 // ── Route 404 ─────────────────────────────────────────────────────────────────
 app.use((req, res) => {

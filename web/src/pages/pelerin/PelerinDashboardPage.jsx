@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext.jsx';
+import { useLanguage } from '../../contexts/LanguageContext.jsx';
 
 export default function PelerinDashboardPage() {
   const { user, api } = useAuth();
+  const { t } = useLanguage();
   const [dossiers, setDossiers] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -16,14 +18,14 @@ export default function PelerinDashboardPage() {
   return (
     <div className="space-y-6">
       <div>
-        <p className="font-mono text-xs uppercase tracking-[0.2em] text-accent">Espace pèlerin</p>
-        <h1 className="mt-2 font-display text-3xl font-semibold text-text-primary">Bienvenue, {user?.prenom}.</h1>
-        <p className="mt-2 text-text-secondary">Ton compte est connecté au backend.</p>
+        <p className="font-mono text-xs uppercase tracking-[0.2em] text-accent">Hajj portal</p>
+        <h1 className="mt-2 font-display text-3xl font-semibold text-text-primary">{t('welcome')}, {user?.prenom}.</h1>
+        <p className="mt-2 text-text-secondary">{t('connected')}</p>
       </div>
       <div className="card">
-        <h2 className="font-display text-xl font-semibold text-text-primary">Mes dossiers</h2>
-        {loading ? <p className="mt-4 text-text-secondary">Chargement…</p> : dossiers.length === 0 ? (
-          <p className="mt-4 text-text-secondary">Aucun dossier pour le moment.</p>
+        <h2 className="font-display text-xl font-semibold text-text-primary">{t('myApplications')}</h2>
+        {loading ? <p className="mt-4 text-text-secondary">{t('loading')}</p> : dossiers.length === 0 ? (
+          <p className="mt-4 text-text-secondary">{t('noApplications')}</p>
         ) : (
           <div className="mt-4 space-y-3">
             {dossiers.map((dossier) => (

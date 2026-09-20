@@ -4,6 +4,7 @@ import { validateLoginForm, isFormValid } from '@hajj/shared';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 import FormField from '../../components/common/FormField.jsx';
 import GeometricPattern from '../../components/common/GeometricPattern.jsx';
+import LanguageSelector from '../../components/common/LanguageSelector.jsx';
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -52,6 +53,7 @@ export default function LoginPage() {
       <GeometricPattern className="pointer-events-none absolute inset-0" />
 
       <div className="relative w-full max-w-md">
+        <div className="mb-4 flex justify-end"><LanguageSelector /></div>
         <div className="mb-8 text-center">
           <p className="mb-2 font-mono text-xs uppercase tracking-[0.2em] text-accent">
             Gestion du pèlerinage

@@ -6,17 +6,19 @@
 export const ROLES = Object.freeze({
   ADMIN: 'admin',
   AGENCE: 'agence',
+  ENCADREUR: 'encadreur',
   PELERIN: 'pelerin',
 });
 
 export const ROLE_LABELS = Object.freeze({
   [ROLES.ADMIN]: 'Administrateur',
   [ROLES.AGENCE]: 'Agence',
+  [ROLES.ENCADREUR]: 'Encadreur',
   [ROLES.PELERIN]: 'Pèlerin',
 });
 
 /** Ordre de priorité utilisé pour trier/afficher les rôles dans l'UI admin */
-export const ROLES_LIST = [ROLES.ADMIN, ROLES.AGENCE, ROLES.PELERIN];
+export const ROLES_LIST = [ROLES.ADMIN, ROLES.AGENCE, ROLES.ENCADREUR, ROLES.PELERIN];
 
 /**
  * Redirection post-connexion par rôle. Centralisé ici pour que
@@ -25,5 +27,6 @@ export const ROLES_LIST = [ROLES.ADMIN, ROLES.AGENCE, ROLES.PELERIN];
 export const HOME_ROUTE_BY_ROLE = Object.freeze({
   [ROLES.ADMIN]: '/admin/dashboard',
   [ROLES.AGENCE]: '/agence/dashboard',
+  [ROLES.ENCADREUR]: '/encadreur/dashboard',
   [ROLES.PELERIN]: '/dashboard', // mobile: écran d'accueil pèlerin
 });

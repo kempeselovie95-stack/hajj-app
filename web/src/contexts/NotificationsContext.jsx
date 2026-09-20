@@ -1,32 +1,67 @@
-import { createContext, useContext, useMemo, useState } from 'react';
-import { MOCK_NOTIFICATIONS } from '../mocks/mockNotifications.js';
+import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { useAuth } from './AuthContext.jsx';
 
 const NotificationsContext = createContext(null);
 
-/**
- * TODO(intégration) : au montage, appeler `api.notifications.list()` pour
- * initialiser l'état, et `api.notifications.markAsRead(id)` dans
- * `markAsRead` avant (ou en parallèle de) la mise à jour optimiste locale.
- */
 export function NotificationsProvider({ children }) {
-  const [notifications, setNotifications] = useState(MOCK_NOTIFICATIONS);
+  const { api, isAuthenticated } = useAuth();
+  const [notifications, setNotifications] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    if (!isAuthenticated) {
+      setNotifications([]);
+      setIsLoading(false);
+      return () => { mounted = false; };
+    }
+
+    setIsLoading(true);
+    const loadNotifications = () => api.notifications.list()
+      .then((data) => {
+        if (!mounted) return;
+        setNotifications((data.notifications ?? []).map(normalizeNotification));
+      })
+      .catch(() => {
+        if (mounted) setNotifications([]);
+      })
+      .finally(() => {
+        if (mounted) setIsLoading(false);
+      });
+
+    loadNotifications();
+    const interval = window.setInterval(loadNotifications, 15000);
+
+    return () => { mounted = false; window.clearInterval(interval); };
+  }, [api, isAuthenticated]);
 
   const unreadCount = useMemo(() => notifications.filter((n) => !n.lue).length, [notifications]);
 
-  function markAsRead(id) {
+  async function markAsRead(id) {
     setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, lue: true } : n)));
+    await api.notifications.markAsRead(id);
   }
 
-  function markAllAsRead() {
+  async function markAllAsRead() {
     setNotifications((prev) => prev.map((n) => ({ ...n, lue: true })));
+    await api.notifications.markAllAsRead();
   }
 
   const value = useMemo(
-    () => ({ notifications, unreadCount, markAsRead, markAllAsRead }),
-    [notifications, unreadCount]
+    () => ({ notifications, unreadCount, markAsRead, markAllAsRead, isLoading }),
+    [notifications, unreadCount, isLoading]
   );
 
   return <NotificationsContext.Provider value={value}>{children}</NotificationsContext.Provider>;
+}
+
+function normalizeNotification(notification) {
+  return {
+    ...notification,
+    message: notification.message ?? notification.corps ?? '',
+    lue: notification.lue ?? Boolean(notification.est_lue),
+    created_at: notification.created_at ?? notification.cree_le,
+  };
 }
 
 export function useNotifications() {

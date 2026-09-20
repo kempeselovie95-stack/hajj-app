@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   DOSSIER_STATUS,
@@ -9,20 +9,37 @@ import {
 } from '@hajj/shared';
 import StatusBadge from '../../components/common/StatusBadge.jsx';
 import ProgressBar from '../../components/common/ProgressBar.jsx';
-import { MOCK_DOSSIERS } from '../../mocks/mockDossiers.js';
+import { useAuth } from '../../contexts/AuthContext.jsx';
 
 const STATUS_FILTER_OPTIONS = [{ value: 'all', label: 'Tous les statuts' }].concat(
   Object.values(DOSSIER_STATUS).map((status) => ({ value: status, label: DOSSIER_STATUS_LABELS[status] }))
 );
 
 export default function DossiersListPage() {
-  // TODO(intégration) : remplacer MOCK_DOSSIERS par un state alimenté par
-  // api.dossiers.list({ agence_id: user.agence_id }) dans un useEffect.
+  const { api } = useAuth();
+  const [dossiers, setDossiers] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
+  useEffect(() => {
+    let mounted = true;
+    api.dossiers.list({ page: 1, limite: 100 })
+      .then((data) => {
+        if (mounted) setDossiers((data.dossiers ?? []).map(normalizeDossier));
+      })
+      .catch((requestError) => {
+        if (mounted) setError(requestError.message || 'Impossible de charger les dossiers.');
+      })
+      .finally(() => {
+        if (mounted) setIsLoading(false);
+      });
+    return () => { mounted = false; };
+  }, [api]);
+
   const filteredDossiers = useMemo(() => {
-    return MOCK_DOSSIERS.filter((dossier) => {
+    return dossiers.filter((dossier) => {
       const matchesStatus = statusFilter === 'all' || dossier.statut === statusFilter;
       const query = search.trim().toLowerCase();
       const matchesSearch =
@@ -31,7 +48,7 @@ export default function DossiersListPage() {
         `${dossier.pelerin.prenom} ${dossier.pelerin.nom}`.toLowerCase().includes(query);
       return matchesStatus && matchesSearch;
     });
-  }, [search, statusFilter]);
+  }, [dossiers, search, statusFilter]);
 
   return (
     <div className="space-y-6">
@@ -64,7 +81,11 @@ export default function DossiersListPage() {
       </div>
 
       <div className="card overflow-hidden !p-0">
-        {filteredDossiers.length === 0 ? (
+        {isLoading ? (
+          <p className="p-6 text-center font-body text-sm text-text-secondary">Chargement des dossiers…</p>
+        ) : error ? (
+          <p className="p-6 text-center font-body text-sm text-danger">{error}</p>
+        ) : filteredDossiers.length === 0 ? (
           <p className="p-6 text-center font-body text-sm text-text-secondary">
             Aucun dossier ne correspond à cette recherche.
           </p>
@@ -118,6 +139,18 @@ export default function DossiersListPage() {
       </div>
     </div>
   );
+}
+
+function normalizeDossier(dossier) {
+  return {
+    ...dossier,
+    created_at: dossier.created_at ?? dossier.cree_le,
+    pelerin: dossier.pelerin ?? {
+      nom: dossier.pelerin_nom?.split(' ').slice(1).join(' ') ?? '',
+      prenom: dossier.pelerin_nom?.split(' ')[0] ?? '',
+    },
+    documents: dossier.documents ?? [],
+  };
 }
 
 function Th({ children }) {

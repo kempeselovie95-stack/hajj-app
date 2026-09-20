@@ -2,12 +2,14 @@ import { NavigationContainer } from '@react-navigation/native';
 import { View, ActivityIndicator } from 'react-native';
 import { THEME } from '@hajj/shared';
 import { useAuth } from '../contexts/AuthContext.jsx';
+import { ROLES } from '@hajj/shared';
 import { usePushNotifications } from '../hooks/usePushNotifications.js';
 import AuthStack from './AuthStack.jsx';
 import MainTabs from './MainTabs.jsx';
+import EncadreurTabs from './EncadreurTabs.jsx';
 
 export default function RootNavigator() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
   usePushNotifications(); // no-op tant que isAuthenticated est false
 
   if (isLoading) {
@@ -20,7 +22,7 @@ export default function RootNavigator() {
 
   return (
     <NavigationContainer>
-      {isAuthenticated ? <MainTabs /> : <AuthStack />}
+      {isAuthenticated ? user?.role === ROLES.ENCADREUR ? <EncadreurTabs /> : <MainTabs /> : <AuthStack />}
     </NavigationContainer>
   );
 }

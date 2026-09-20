@@ -1,7 +1,7 @@
 const express = require('express');
 const { body, param } = require('express-validator');
-const { listerDossiers, obtenirDossier, creerDossier, mettreAJourStatut } = require('../controllers/dossiersController');
-const { authentifier, autoriser } = require('../middleware/auth');
+const { listerDossiers, obtenirDossier, creerDossier, mettreAJourStatut } = require('../controllers/Dossierscontroller');
+const { authentifier, autoriser } = require('../middleware/Auth');
 const { uploadDocument, listerDocuments } = require('../controllers/documentsController');
 
 const router = express.Router();

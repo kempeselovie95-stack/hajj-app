@@ -3,18 +3,23 @@
  * Toutes les fonctions d'appel au backend sont ici — une seule source de vérité
  */
 
-const { apiClient } = require('./client');
+import axios from 'axios';
+
+const apiClient = axios.create({
+  baseURL: globalThis.__HAJJ_API_URL__ || '/api',
+  headers: { Accept: 'application/json' },
+});
 
 // ── Authentification ──────────────────────────────────────────────────────────
 const authService = {
   seConnecter: (email, motDePasse) =>
-    apiClient.post('/auth/connexion', { email, mot_de_passe: motDePasse }),
+    apiClient.post('/auth/login', { email, mot_de_passe: motDePasse }),
 
   sInscrire: (donnees) =>
-    apiClient.post('/auth/inscription', donnees),
+    apiClient.post('/auth/register', donnees),
 
   obtenirProfil: () =>
-    apiClient.get('/auth/profil'),
+    apiClient.get('/auth/me'),
 
   mettreAJourFcmToken: (fcmToken) =>
     apiClient.patch('/auth/fcm-token', { fcm_token: fcmToken }),
@@ -53,10 +58,10 @@ const notificationsService = {
     apiClient.get('/notifications', { params }),
 
   marquerLue: (id) =>
-    apiClient.patch(`/notifications/${id}/lire`),
+    apiClient.patch(`/notifications/${id}/read`),
 
   toutMarquerLu: () =>
-    apiClient.patch('/notifications/tout-lire'),
+    apiClient.patch('/notifications/read-all'),
 };
 
-module.exports = { authService, dossiersService, documentsService, notificationsService };
+export { authService, dossiersService, documentsService, notificationsService };

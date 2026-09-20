@@ -4,6 +4,7 @@ import { isFormValid, validateRegisterForm } from '@hajj/shared';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 import FormField from '../../components/common/FormField.jsx';
 import GeometricPattern from '../../components/common/GeometricPattern.jsx';
+import LanguageSelector from '../../components/common/LanguageSelector.jsx';
 
 const INITIAL_FORM = {
   nom: '',
@@ -51,6 +52,7 @@ export default function RegisterPage() {
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background px-4 py-8">
       <GeometricPattern className="pointer-events-none absolute inset-0" />
       <div className="relative w-full max-w-lg">
+        <div className="mb-4 flex justify-end"><LanguageSelector /></div>
         <div className="mb-8 text-center">
           <p className="mb-2 font-mono text-xs uppercase tracking-[0.2em] text-accent">Gestion du pèlerinage</p>
           <h1 className="font-display text-3xl font-semibold text-text-primary">Créer un compte</h1>

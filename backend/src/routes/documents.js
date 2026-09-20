@@ -1,6 +1,6 @@
 const express = require('express');
 const { body, param } = require('express-validator');
-const { authentifier, autoriser } = require('../middleware/auth');
+const { authentifier, autoriser } = require('../middleware/Auth');
 const { validerDocument, rejeterDocument } = require('../controllers/documentsController');
 const router = express.Router();
 router.use(authentifier, autoriser('admin', 'agence'));

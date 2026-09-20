@@ -13,7 +13,8 @@ export function AuthProvider({ children }) {
   // l'injection du token et la déconnexion auto sur 401.
   const api = useMemo(() => {
     const client = createApiClient({
-      baseURL: import.meta.env.VITE_API_URL || '',
+      // En développement, les appels relatifs passent par le proxy Vite.
+      baseURL: import.meta.env.VITE_API_URL || window.location.origin,
       getToken: () => localStorage.getItem(TOKEN_STORAGE_KEY),
       onUnauthorized: () => {
         localStorage.removeItem(TOKEN_STORAGE_KEY);
@@ -62,6 +63,12 @@ export function AuthProvider({ children }) {
     setUser(null);
   }, []);
 
+  const updateProfile = useCallback(async (payload) => {
+    const data = await api.auth.updateProfile(payload);
+    setUser(data.user);
+    return data.user;
+  }, [api]);
+
   const value = useMemo(
     () => ({
       user,
@@ -70,6 +77,7 @@ export function AuthProvider({ children }) {
       login,
       register,
       logout,
+      updateProfile,
       api,
       homeRoute: user ? HOME_ROUTE_BY_ROLE[user.role] : '/login',
     }),

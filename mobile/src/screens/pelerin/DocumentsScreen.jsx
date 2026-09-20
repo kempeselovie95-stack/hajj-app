@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, Alert } from 'react-native';
+import { useEffect, useState } from 'react';
+import { View, Text, ScrollView, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import {
@@ -13,14 +13,32 @@ import { FONTS } from '../../hooks/useAppFonts.js';
 import ProgressBar from '../../components/ProgressBar.jsx';
 import DocumentChecklistItem from '../../components/DocumentChecklistItem.jsx';
 import UploadActionSheet from '../../components/UploadActionSheet.jsx';
-import { MOCK_PELERIN_DOSSIER } from '../../mocks/mockDossier.js';
+import { useAuth } from '../../contexts/AuthContext.jsx';
 
 export default function DocumentsScreen() {
-  // TODO(intégration) : charger via api.dossiers.list(...) au montage
-  // (useEffect + état de chargement), au lieu du mock statique.
-  const [dossier, setDossier] = useState(MOCK_PELERIN_DOSSIER);
+  const { api } = useAuth();
+  const [dossier, setDossier] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [activeUpload, setActiveUpload] = useState(null); // { type, label } | null
   const [uploadingType, setUploadingType] = useState(null);
+
+  useEffect(() => {
+    let mounted = true;
+    api.dossiers.list({ page: 1, limite: 1 })
+      .then(async (data) => {
+        const summary = data.dossiers?.[0];
+        if (!summary) return;
+        const detail = await api.dossiers.getById(summary.id);
+        if (mounted) setDossier(detail.dossier);
+      })
+      .catch(() => {
+        if (mounted) setDossier(null);
+      })
+      .finally(() => {
+        if (mounted) setLoading(false);
+      });
+    return () => { mounted = false; };
+  }, [api]);
 
   const checklist = buildDocumentChecklist(dossier.documents);
   const progress = computeDocumentProgress(dossier.documents);
@@ -44,19 +62,19 @@ export default function DocumentsScreen() {
     setUploadingType(type);
     setActiveUpload(null);
 
-    // TODO(intégration) : construire un FormData avec `file.uri` et
-    // appeler api.documents.upload(dossier.id, formData). Le setTimeout
-    // simule la latence réseau pour un rendu de démo crédible.
-    setTimeout(() => {
-      setDossier((prev) => ({
-        ...prev,
-        documents: [
-          ...prev.documents.filter((d) => d.type !== type),
-          { id: Date.now(), type, statut: DOCUMENT_STATUS.EN_ATTENTE },
-        ],
-      }));
-      setUploadingType(null);
-    }, 600);
+    const formData = new FormData();
+    formData.append('type_document', type);
+    formData.append('fichier', {
+      uri: file.uri,
+      name: file.name ?? `${type}.jpg`,
+      type: file.mimeType,
+    });
+
+    api.documents.upload(dossier.id, formData)
+      .then(() => api.dossiers.getById(dossier.id))
+      .then((data) => setDossier(data.dossier))
+      .catch((error) => Alert.alert('Envoi impossible', error.message))
+      .finally(() => setUploadingType(null));
   }
 
   async function handlePickCamera() {
@@ -117,6 +135,11 @@ export default function DocumentsScreen() {
 
   return (
     <View style={styles.flex}>
+      {loading ? (
+        <ActivityIndicator style={styles.loader} color={THEME.colors.primary} />
+      ) : !dossier ? (
+        <Text style={styles.emptyText}>Aucun dossier disponible.</Text>
+      ) : (
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.title}>Mes documents</Text>
         <Text style={styles.subtitle}>{dossier.numero_dossier}</Text>
@@ -137,6 +160,7 @@ export default function DocumentsScreen() {
           ))}
         </View>
       </ScrollView>
+      )}
 
       <UploadActionSheet
         isVisible={!!activeUpload}
@@ -152,6 +176,8 @@ export default function DocumentsScreen() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: THEME.colors.background },
+  loader: { flex: 1 },
+  emptyText: { margin: THEME.spacing.lg, color: THEME.colors.textSecondary },
   content: { padding: THEME.spacing.lg },
   title: {
     fontFamily: FONTS.displaySemibold,

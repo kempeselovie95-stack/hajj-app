@@ -1,7 +1,7 @@
 const express = require('express');
 const { body } = require('express-validator');
-const { seConnecter, sInscrire, obtenirProfil, mettreAJourFcmToken } = require('../controllers/authController');
-const { authentifier } = require('../middleware/auth');
+const { seConnecter, sInscrire, obtenirProfil, mettreAJourFcmToken, mettreAJourProfil } = require('../controllers/Authcontroller');
+const { authentifier } = require('../middleware/Auth');
 
 const router = express.Router();
 const connexionRules = [
@@ -21,5 +21,10 @@ const inscriptionRules = [
 router.post('/login', connexionRules, seConnecter);
 router.post('/register', inscriptionRules, sInscrire);
 router.get('/me', authentifier, obtenirProfil);
+router.patch('/profile', authentifier, [
+  body('nom').trim().notEmpty(), body('prenom').trim().notEmpty(),
+  body('email').isEmail().normalizeEmail(), body('telephone').optional({ values: 'falsy' }).isString(),
+  body('mot_de_passe').optional({ values: 'falsy' }).isLength({ min: 8 }).matches(/[A-Z]/).matches(/[0-9]/),
+], mettreAJourProfil);
 router.patch('/fcm-token', authentifier, body('fcm_token').optional().isString(), mettreAJourFcmToken);
 module.exports = router;

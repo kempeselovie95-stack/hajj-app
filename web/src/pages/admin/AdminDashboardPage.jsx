@@ -4,22 +4,17 @@ import {
   DOSSIER_STATUS_COLOR,
 } from '@hajj/shared';
 import StatusBadge from '../../components/common/StatusBadge.jsx';
-
-/**
- * TODO(intégration) : remplacer ces données par un appel
- * `api.dossiers.list()` + agrégation, une fois le backend resynchronisé.
- * La structure du rendu (cartes de synthèse + répartition par statut)
- * est volontairement déjà branchée sur les vraies constantes partagées.
- */
-const MOCK_SUMMARY = {
-  totalDossiers: 0,
-  totalAgences: 0,
-  totalPelerins: 0,
-};
+import { useAuth } from '../../contexts/AuthContext.jsx';
+import { useEffect, useState } from 'react';
 
 const STATUS_ORDER = Object.values(DOSSIER_STATUS);
 
 export default function AdminDashboardPage() {
+  const { api } = useAuth();
+  const [stats, setStats] = useState(null);
+  useEffect(() => { api.admin.stats().then((data) => setStats({ ...data.resume, statuts: data.statuts })).catch(() => setStats(null)); }, [api]);
+  const summary = stats || { total_dossiers: 0, total_agences: 0, total_pelerins: 0, total_encadreurs: 0, dossiers_actifs: 0, statuts: [] };
+  const statusCount = Object.fromEntries((summary.statuts || []).map((item) => [item.statut, item.total]));
   return (
     <div className="space-y-8">
       <div>
@@ -32,9 +27,10 @@ export default function AdminDashboardPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <SummaryCard label="Dossiers actifs" value={MOCK_SUMMARY.totalDossiers} />
-        <SummaryCard label="Agences enregistrées" value={MOCK_SUMMARY.totalAgences} />
-        <SummaryCard label="Pèlerins inscrits" value={MOCK_SUMMARY.totalPelerins} />
+        <SummaryCard label="Dossiers actifs" value={summary.dossiers_actifs} />
+        <SummaryCard label="Agences enregistrées" value={summary.total_agences} />
+        <SummaryCard label="Pèlerins inscrits" value={summary.total_pelerins} />
+        <SummaryCard label="Encadreurs actifs" value={summary.total_encadreurs} />
       </div>
 
       <div className="card">
@@ -48,7 +44,7 @@ export default function AdminDashboardPage() {
                 label={DOSSIER_STATUS_LABELS[status]}
                 semantic={DOSSIER_STATUS_COLOR[status]}
               />
-              <span className="font-mono text-sm text-text-secondary">0</span>
+              <span className="font-mono text-sm text-text-secondary">{statusCount[status] || 0}</span>
             </li>
           ))}
         </ul>

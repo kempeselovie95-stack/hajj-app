@@ -1,47 +1,64 @@
 import axios from 'axios';
 
-/**
- * Crée une instance Axios configurée avec :
- *  - injection automatique du token JWT dans le header Authorization
- *  - déconnexion automatique sur 401 (token expiré/invalide)
- *
- * Le stockage du token diffère entre web (localStorage) et mobile
- * (expo-secure-store, asynchrone) : on injecte donc un adaptateur plutôt
- * que de coder un mécanisme de stockage ici. C'est ce qui permet à ce
- * fichier d'être 100% partagé entre les deux plateformes.
- *
- * @param {Object} config
- * @param {string} config.baseURL - URL de base de l'API backend
- * @param {() => Promise<string|null>|string|null} config.getToken - lit le token stocké
- * @param {() => Promise<void>|void} config.onUnauthorized - appelé sur 401 (ex: purge du token + redirection login)
- * @returns {import('axios').AxiosInstance}
- */
+function normalizeBaseURL(value) {
+  return String(value || '').trim().replace(/\/+$/, '');
+}
+
 export function createApiClient({ baseURL, getToken, onUnauthorized }) {
+  const normalizedBaseURL = normalizeBaseURL(baseURL);
+
+  if (!normalizedBaseURL) {
+    throw new Error(
+      'URL du backend absente. Configure VITE_API_URL dans web/.env ou EXPO_PUBLIC_API_URL dans mobile/.env.'
+    );
+  }
+
   const client = axios.create({
-    baseURL,
+    baseURL: normalizedBaseURL,
     timeout: 15000,
+    headers: { Accept: 'application/json' },
   });
 
-  client.interceptors.request.use(async (requestConfig) => {
-    const token = await getToken();
+  client.interceptors.request.use(async (config) => {
+    const token = await getToken?.();
     if (token) {
-      requestConfig.headers.Authorization = `Bearer ${token}`;
+      config.headers = config.headers || {};
+      config.headers.Authorization = `Bearer ${token}`;
     }
-    return requestConfig;
+    return config;
   });
 
   client.interceptors.response.use(
     (response) => response,
     async (error) => {
       const status = error?.response?.status;
+      const backendMessage = error?.response?.data?.message;
+      const validationMessage = error?.response?.data?.erreurs;
+
       if (status === 401) {
         await onUnauthorized?.();
       }
-      // On propage une erreur normalisée pour simplifier la gestion côté UI
+
+      if (!error?.response) {
+        const url = error?.config?.baseURL || normalizedBaseURL;
+        return Promise.reject({
+          status: undefined,
+          message:
+            `Impossible de joindre le serveur (${url}). ` +
+            'Vérifie que le backend est démarré, que le téléphone et le PC sont sur le même Wi-Fi, ' +
+            'et que EXPO_PUBLIC_API_URL utilise l’IP LAN du PC (pas localhost).',
+          original: error,
+        });
+      }
+
       const message =
-        error?.response?.data?.message ||
+        backendMessage ||
+        (Array.isArray(validationMessage)
+          ? validationMessage.map((e) => e.msg || e.message).filter(Boolean).join(' — ')
+          : null) ||
         error?.message ||
         'Une erreur réseau est survenue.';
+
       return Promise.reject({ status, message, original: error });
     }
   );

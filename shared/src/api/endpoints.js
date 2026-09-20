@@ -5,6 +5,7 @@ export function createAuthApi(client) {
     registerPelerin: (payload) =>
       client.post('/api/auth/register', { ...payload, mot_de_passe: payload.mot_de_passe ?? payload.password }).then((r) => r.data),
     me: () => client.get('/api/auth/me').then((r) => r.data),
+    updateProfile: (payload) => client.patch('/api/auth/profile', payload).then((r) => r.data),
   };
 }
 
@@ -36,11 +37,36 @@ export function createNotificationsApi(client) {
   };
 }
 
+export function createAdminApi(client) {
+  return {
+    listAgencies: () => client.get('/api/admin/agencies').then((r) => r.data),
+    stats: () => client.get('/api/admin/stats').then((r) => r.data),
+    createAgency: (payload) => client.post('/api/admin/agencies', payload).then((r) => r.data),
+    deleteAgency: (id) => client.delete(`/api/admin/agencies/${id}`).then((r) => r.data),
+    listEncadreurs: () => client.get('/api/admin/encadreurs').then((r) => r.data),
+    createEncadreur: (payload) => client.post('/api/admin/encadreurs', payload).then((r) => r.data),
+    deleteEncadreur: (id) => client.delete(`/api/admin/encadreurs/${id}`).then((r) => r.data),
+  };
+}
+
+export function createGroupsApi(client) {
+  return {
+    list: () => client.get('/api/groups').then((r) => r.data),
+    getById: (id) => client.get(`/api/groups/${id}`).then((r) => r.data),
+    create: (payload) => client.post('/api/groups', payload).then((r) => r.data),
+    addMember: (id, pelerinId) => client.post(`/api/groups/${id}/members`, { pelerin_id: pelerinId }).then((r) => r.data),
+    listMessages: (id) => client.get(`/api/groups/${id}/messages`).then((r) => r.data),
+    sendMessage: (id, formData) => client.post(`/api/groups/${id}/messages`, formData).then((r) => r.data),
+  };
+}
+
 export function createHajjApi(client) {
   return {
     auth: createAuthApi(client),
     dossiers: createDossiersApi(client),
     documents: createDocumentsApi(client),
     notifications: createNotificationsApi(client),
+    admin: createAdminApi(client),
+    groups: createGroupsApi(client),
   };
 }

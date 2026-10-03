@@ -1,4 +1,4 @@
-import { Modal, View, Text, Pressable, StyleSheet } from 'react-native';
+import { Modal, View, Text, Pressable, StyleSheet, TextInput } from 'react-native';
 import { THEME } from '@hajj/shared';
 import { FONTS } from '../hooks/useAppFonts.js';
 
@@ -13,6 +13,8 @@ import { FONTS } from '../hooks/useAppFonts.js';
 export default function UploadActionSheet({
   isVisible,
   documentLabel,
+  expirationDate,
+  onExpirationDateChange,
   onClose,
   onPickCamera,
   onPickGallery,
@@ -24,6 +26,16 @@ export default function UploadActionSheet({
         <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation?.()}>
           <Text style={styles.title}>{documentLabel}</Text>
           <Text style={styles.subtitle}>Choisis comment ajouter ce document</Text>
+          <Text style={styles.expirationLabel}>Date d’expiration (facultative)</Text>
+          <TextInput
+            accessibilityLabel="Date d’expiration du document"
+            value={expirationDate}
+            onChangeText={onExpirationDateChange}
+            placeholder="AAAA-MM-JJ"
+            keyboardType="numbers-and-punctuation"
+            maxLength={10}
+            style={styles.expirationInput}
+          />
 
           <SheetOption label="📷  Prendre une photo" onPress={onPickCamera} />
           <SheetOption label="🖼️  Choisir depuis la galerie" onPress={onPickGallery} />
@@ -72,6 +84,21 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: THEME.spacing.xs,
     marginBottom: THEME.spacing.lg,
+  },
+  expirationLabel: {
+    fontFamily: FONTS.bodyMedium,
+    fontSize: THEME.typography.sizes.xs,
+    color: THEME.colors.textSecondary,
+  },
+  expirationInput: {
+    marginTop: THEME.spacing.xs,
+    marginBottom: THEME.spacing.md,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+    borderRadius: THEME.radius.sm,
+    padding: THEME.spacing.sm,
+    color: THEME.colors.textPrimary,
+    fontFamily: FONTS.bodyRegular,
   },
   option: {
     paddingVertical: THEME.spacing.md,

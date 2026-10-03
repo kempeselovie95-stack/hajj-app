@@ -13,7 +13,8 @@ import StatusBadge from './StatusBadge.jsx';
  */
 export default function DocumentChecklistItem({ label, document, isUploading, onPressAdd }) {
   const isMissing = !document;
-  const canReupload = isMissing || document?.statut === DOCUMENT_STATUS.REJETE;
+  const isExpired = document?.status === 'EXPIRED';
+  const canReupload = isMissing || document?.statut === DOCUMENT_STATUS.REJETE || isExpired;
 
   return (
     <View style={styles.row}>
@@ -22,6 +23,8 @@ export default function DocumentChecklistItem({ label, document, isUploading, on
 
         {isMissing ? (
           <Text style={styles.hint}>Pas encore transmis</Text>
+        ) : isExpired ? (
+          <Text style={styles.rejectReason}>Document expiré · ajoute une version valide.</Text>
         ) : document.statut === DOCUMENT_STATUS.REJETE && document.motif_rejet ? (
           <Text style={styles.rejectReason}>Motif : {document.motif_rejet}</Text>
         ) : null}
@@ -32,14 +35,18 @@ export default function DocumentChecklistItem({ label, document, isUploading, on
           <View style={styles.badgeSpacing}>
             <StatusBadge
               label={
-                document.statut === DOCUMENT_STATUS.VALIDE
+                isExpired
+                  ? 'Expiré'
+                  : document.statut === DOCUMENT_STATUS.VALIDE
                   ? 'Validé'
                   : document.statut === DOCUMENT_STATUS.REJETE
                   ? 'Rejeté'
                   : 'En attente'
               }
               semantic={
-                document.statut === DOCUMENT_STATUS.VALIDE
+                isExpired
+                  ? 'danger'
+                  : document.statut === DOCUMENT_STATUS.VALIDE
                   ? 'success'
                   : document.statut === DOCUMENT_STATUS.REJETE
                   ? 'danger'

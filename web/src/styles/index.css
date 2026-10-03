@@ -7,9 +7,21 @@
     background-color: var(--color-background);
   }
 
+  * {
+    box-sizing: border-box;
+  }
+
+  html,
+  body,
+  #root {
+    min-height: 100%;
+    height: 100%;
+  }
+
   body {
     @apply font-body text-text-primary antialiased;
-    background-color: var(--color-background);
+    background-color: #edf1f4;
+    margin: 0;
     min-width: 320px;
   }
 

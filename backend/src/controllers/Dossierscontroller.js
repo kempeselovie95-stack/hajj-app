@@ -1,6 +1,7 @@
 const { validationResult } = require('express-validator');
 const { pool } = require('../config/database');
 const { envoyerNotification } = require('../services/notificationService');
+const path = require('path');
 
 const ALLOWED_TRANSITIONS = {
   brouillon: ['soumis', 'annule'],
@@ -38,7 +39,7 @@ const listerDossiers = async (req,res,next)=>{try{
   if(req.query.statut){where += where?' AND d.statut=?':'WHERE d.statut=?';params.push(req.query.statut);}
   const offset=(page-1)*limite;
   const [dossiers]=await pool.execute(`SELECT d.id,d.numero_dossier,d.annee_hajj,d.statut,d.type_package,d.date_depart,d.date_retour,d.cree_le,
-    CONCAT(u.prenom,' ',u.nom) AS pelerin_nom,u.email AS pelerin_email,a.nom_agence
+    CONCAT(u.prenom,' ',u.nom) AS pelerin_nom,u.email AS pelerin_email,u.telephone,a.nom_agence
     FROM dossiers d JOIN utilisateurs u ON u.id=d.pelerin_id LEFT JOIN agences a ON a.id=d.agence_id ${where} ORDER BY d.cree_le DESC LIMIT ${limite} OFFSET ${offset}`,params);
   const [count]=await pool.execute(`SELECT COUNT(*) AS total FROM dossiers d ${where}`,params);
   res.json({succes:true,dossiers,pagination:{page,limite,total:Number(count[0].total),totalPages:Math.ceil(Number(count[0].total)/limite)}});
@@ -53,11 +54,17 @@ const obtenirDossier = async (req,res,next)=>{try{
     const [assigned]=await pool.execute('SELECT 1 FROM groupe_membres gm JOIN groupes_pelerins g ON g.id=gm.groupe_id WHERE g.encadreur_id=? AND gm.pelerin_id=?',[req.utilisateur.id,dossier.pelerin_id]);
     if(!assigned.length)return res.status(403).json({succes:false,message:'Accès refusé'});
   }
-  const [documentRows]=await pool.execute(`SELECT id,type_document AS type,nom_fichier,chemin_fichier AS url_fichier,taille_octets,est_valide,valide_le,cree_le FROM documents WHERE dossier_id=? ORDER BY cree_le`,[req.params.id]);
-  const documents=documentRows.map((document)=>({
-    ...document,
-    statut: document.est_valide === 1 || document.est_valide === true ? 'valide' : document.est_valide === 0 || document.est_valide === false ? 'rejete' : 'en_attente',
-  }));
+  const [documentRows]=await pool.execute(`SELECT id,type_document AS type,nom_fichier,chemin_fichier,taille_octets,est_valide,statut,motif_rejet,expiration_date,valide_par,valide_le,cree_le FROM documents WHERE dossier_id=? ORDER BY cree_le`,[req.params.id]);
+  const documents=documentRows.map((document)=>{
+    const expired=document.expiration_date&&new Date(document.expiration_date)<new Date()&&document.statut==='APPROVED';
+    const status=expired?'EXPIRED':document.statut;
+    return {
+      ...document,
+      url_fichier:`/uploads/${encodeURIComponent(path.basename(document.chemin_fichier))}`,
+      status,
+      statut:status==='APPROVED'?'valide':status==='REJECTED'?'rejete':'en_attente',
+    };
+  });
   const [historiqueRows]=await pool.execute(`SELECT h.id,h.statut,h.commentaire,h.cree_le,h.modifie_par,CONCAT(u.prenom,' ',u.nom) AS modifie_par_nom FROM historique_statuts h LEFT JOIN utilisateurs u ON u.id=h.modifie_par WHERE h.dossier_id=? ORDER BY h.cree_le ASC`,[req.params.id]);
   const historique=historiqueRows.map((h,i)=>({id:h.id,ancien_statut:i?historiqueRows[i-1].statut:null,nouveau_statut:h.statut,commentaire:h.commentaire,modifie_par_nom:h.modifie_par_nom||'Système',created_at:h.cree_le}));
   res.json({succes:true,dossier:{...dossier,documents,historique}});
@@ -65,10 +72,12 @@ const obtenirDossier = async (req,res,next)=>{try{
 
 const creerDossier = async (req,res,next)=>{try{
   const errors=validationResult(req); if(!errors.isEmpty())return res.status(400).json({succes:false,erreurs:errors.array()});
-  const {annee_hajj,type_package='standard',agence_id=null}=req.body;
+  const {annee_hajj,type_package='standard',agence_id=null,saison_id=null,forfait_id=null}=req.body;
   if(agence_id){const [a]=await pool.execute('SELECT id FROM agences WHERE id=?',[agence_id]);if(!a.length)return res.status(400).json({succes:false,message:'Agence introuvable'});}
+  if(saison_id){const [s]=await pool.execute('SELECT id FROM saisons_hajj WHERE id=?',[saison_id]); if(!s.length)return res.status(400).json({succes:false,message:'Saison introuvable'});}
+  if(forfait_id){const [f]=await pool.execute('SELECT id FROM forfaits WHERE id=?',[forfait_id]); if(!f.length)return res.status(400).json({succes:false,message:'Forfait introuvable'});}
   const numero=await genererNumeroDossier(annee_hajj);
-  const [result]=await pool.execute(`INSERT INTO dossiers(pelerin_id,agence_id,numero_dossier,annee_hajj,statut,type_package) VALUES(?,?,?,?,?,?)`,[req.utilisateur.id,agence_id,numero,annee_hajj,'brouillon',type_package]);
+  const [result]=await pool.execute(`INSERT INTO dossiers(pelerin_id,agence_id,numero_dossier,annee_hajj,statut,type_package,saison_id,forfait_id) VALUES(?,?,?,?,?,?,?,?)`,[req.utilisateur.id,agence_id,numero,annee_hajj,'brouillon',type_package,saison_id,forfait_id]);
   await pool.execute(`INSERT INTO historique_statuts(dossier_id,statut,commentaire,modifie_par) VALUES(?,?,?,?)`,[result.insertId,'brouillon','Dossier créé',req.utilisateur.id]);
   res.status(201).json({succes:true,message:'Dossier créé avec succès',dossier_id:result.insertId,numero_dossier:numero});
 }catch(e){next(e)}};

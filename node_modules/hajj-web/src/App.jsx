@@ -17,6 +17,10 @@ import PilgrimsPage from './pages/agence/PilgrimsPage.jsx';
 import EncadreurDashboardPage from './pages/encadreur/EncadreurDashboardPage.jsx';
 import GroupChatPage from './pages/encadreur/GroupChatPage.jsx';
 import EncadreursPage from './pages/admin/EncadreursPage.jsx';
+import OperationsPage from './pages/admin/OperationsPage.jsx';
+import PaymentManagementPage from './pages/payments/PaymentManagementPage.jsx';
+import OrganisationsPage from './pages/admin/OrganisationsPage.jsx';
+import DocumentsManagementPage from './pages/documents/DocumentsManagementPage.jsx';
 import ProfilePage from './pages/account/ProfilePage.jsx';
 import { LanguageProvider } from './contexts/LanguageContext.jsx';
 
@@ -53,7 +57,16 @@ function AppRoutes() {
           <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
           <Route path="/admin/agences" element={<AgenciesPage />} />
           <Route path="/admin/encadreurs" element={<EncadreursPage />} />
+          <Route path="/admin/pelerins" element={<PilgrimsPage />} />
           <Route path="/admin/dossiers" element={<AdminDossiersListPage />} />
+          <Route path="/admin/paiements" element={<PaymentManagementPage />} />
+          <Route path="/admin/documents" element={<DocumentsManagementPage />} />
+          <Route path="/admin/voyages" element={<MenuModulePage title="Voyages" />} />
+          <Route path="/admin/presence" element={<MenuModulePage title="QR & Présence" />} />
+          <Route path="/admin/operations" element={<OperationsPage />} />
+          <Route path="/admin/statistiques" element={<AdminDashboardPage />} />
+          <Route path="/admin/organisations" element={<OrganisationsPage />} />
+          <Route path="/admin/parametres" element={<ProfilePage />} />
           <Route path="/admin/notifications" element={<NotificationsPage />} />
           <Route path="/admin/profile" element={<ProfilePage />} />
           {/* TODO(Phase 3+) : /admin/agences */}
@@ -67,6 +80,12 @@ function AppRoutes() {
           <Route path="/agence/dossiers" element={<DossiersListPage />} />
           <Route path="/agence/dossiers/:id" element={<DossierDetailPage />} />
           <Route path="/agence/pelerins" element={<PilgrimsPage />} />
+          <Route path="/agence/paiements" element={<PaymentManagementPage />} />
+          <Route path="/agence/documents" element={<DocumentsManagementPage />} />
+          <Route path="/agence/groupes" element={<MenuModulePage title="Groupes" />} />
+          <Route path="/agence/guides" element={<MenuModulePage title="Guides" />} />
+          <Route path="/agence/voyages" element={<MenuModulePage title="Voyages" />} />
+          <Route path="/agence/presence" element={<MenuModulePage title="QR & Présence" />} />
           <Route path="/agence/notifications" element={<NotificationsPage />} />
           <Route path="/agence/profile" element={<ProfilePage />} />
           {/* TODO(Phase 3+) : /agence/pelerins */}
@@ -77,6 +96,7 @@ function AppRoutes() {
       <Route element={<ProtectedRoute allowedRoles={[ROLES.ENCADREUR]} />}>
         <Route element={<AppShell />}>
           <Route path="/encadreur/dashboard" element={<EncadreurDashboardPage />} />
+          <Route path="/encadreur/groupes" element={<EncadreurDashboardPage />} />
           <Route path="/encadreur/groupes/:id/chat" element={<GroupChatPage />} />
           <Route path="/encadreur/notifications" element={<NotificationsPage />} />
           <Route path="/encadreur/profile" element={<ProfilePage />} />
@@ -86,6 +106,15 @@ function AppRoutes() {
       <Route path="/" element={<RootRedirect />} />
       <Route path="*" element={<RootRedirect />} />
     </Routes>
+  );
+}
+
+function MenuModulePage({ title }) {
+  return (
+    <section className="mx-auto max-w-4xl py-8">
+      <h1 className="text-2xl font-semibold text-slate-800">{title}</h1>
+      <p className="mt-2 text-sm text-slate-500">Ce module est en préparation.</p>
+    </section>
   );
 }
 

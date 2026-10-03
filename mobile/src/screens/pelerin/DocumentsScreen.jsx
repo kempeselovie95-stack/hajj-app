@@ -4,6 +4,8 @@ import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import {
   DOCUMENT_STATUS,
+  DOCUMENT_TYPE_LABELS,
+  OPTIONAL_DOCUMENT_TYPES,
   buildDocumentChecklist,
   computeDocumentProgress,
   validateDocumentFile,
@@ -21,6 +23,7 @@ export default function DocumentsScreen() {
   const [loading, setLoading] = useState(true);
   const [activeUpload, setActiveUpload] = useState(null); // { type, label } | null
   const [uploadingType, setUploadingType] = useState(null);
+  const [expirationDate, setExpirationDate] = useState('');
 
   useEffect(() => {
     let mounted = true;
@@ -42,8 +45,14 @@ export default function DocumentsScreen() {
 
   const checklist = buildDocumentChecklist(dossier.documents);
   const progress = computeDocumentProgress(dossier.documents);
+  const optionalDocuments = OPTIONAL_DOCUMENT_TYPES.map((type) => ({
+    type,
+    label: DOCUMENT_TYPE_LABELS[type],
+    document: dossier.documents?.find((document) => document.type === type) ?? null,
+  }));
 
   function openUploadSheet(type, label) {
+    setExpirationDate('');
     setActiveUpload({ type, label });
   }
 
@@ -58,12 +67,17 @@ export default function DocumentsScreen() {
       Alert.alert('Fichier invalide', validationError);
       return;
     }
+    if (expirationDate && !/^\d{4}-\d{2}-\d{2}$/.test(expirationDate)) {
+      Alert.alert('Date invalide', 'Saisis la date au format AAAA-MM-JJ.');
+      return;
+    }
 
     setUploadingType(type);
     setActiveUpload(null);
 
     const formData = new FormData();
     formData.append('type_document', type);
+    if (expirationDate) formData.append('expiration_date', expirationDate);
     formData.append('fichier', {
       uri: file.uri,
       name: file.name ?? `${type}.jpg`,
@@ -72,7 +86,7 @@ export default function DocumentsScreen() {
 
     api.documents.upload(dossier.id, formData)
       .then(() => api.dossiers.getById(dossier.id))
-      .then((data) => setDossier(data.dossier))
+      .then((data) => { setDossier(data.dossier); setExpirationDate(''); })
       .catch((error) => Alert.alert('Envoi impossible', error.message))
       .finally(() => setUploadingType(null));
   }
@@ -159,12 +173,30 @@ export default function DocumentsScreen() {
             />
           ))}
         </View>
+
+        <View style={styles.optionalSection}>
+          <Text style={styles.optionalTitle}>Autres documents</Text>
+          <Text style={styles.optionalDescription}>Pièces complémentaires non obligatoires pour la progression du dossier.</Text>
+          <View style={styles.checklistCard}>
+            {optionalDocuments.map(({ type, label, document }) => (
+              <DocumentChecklistItem
+                key={type}
+                label={label}
+                document={document}
+                isUploading={uploadingType === type}
+                onPressAdd={() => openUploadSheet(type, label)}
+              />
+            ))}
+          </View>
+        </View>
       </ScrollView>
       )}
 
       <UploadActionSheet
         isVisible={!!activeUpload}
         documentLabel={activeUpload?.label ?? ''}
+        expirationDate={expirationDate}
+        onExpirationDateChange={setExpirationDate}
         onClose={() => setActiveUpload(null)}
         onPickCamera={handlePickCamera}
         onPickGallery={handlePickGallery}
@@ -205,5 +237,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: THEME.colors.border,
     paddingHorizontal: THEME.spacing.md,
+  },
+  optionalSection: { marginTop: THEME.spacing.lg },
+  optionalTitle: {
+    fontFamily: FONTS.displaySemibold,
+    fontSize: THEME.typography.sizes.lg,
+    color: THEME.colors.textPrimary,
+  },
+  optionalDescription: {
+    fontFamily: FONTS.bodyRegular,
+    fontSize: THEME.typography.sizes.xs,
+    color: THEME.colors.textSecondary,
+    marginTop: 4,
+    marginBottom: THEME.spacing.md,
   },
 });

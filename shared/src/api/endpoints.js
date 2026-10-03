@@ -21,8 +21,10 @@ export function createDossiersApi(client) {
 
 export function createDocumentsApi(client) {
   return {
+    listForReview: (statut = 'ALL') => client.get('/api/documents', { params: { statut } }).then((r) => r.data),
     listByDossier: (dossierId) => client.get(`/api/dossiers/${dossierId}/documents`).then((r) => r.data),
     upload: (dossierId, formData) => client.post(`/api/dossiers/${dossierId}/documents`, formData).then((r) => r.data),
+    review: (id, statut, motif) => client.patch(`/api/documents/${id}/review`, { statut, motif }).then((r) => r.data),
     validate: (documentId) => client.patch(`/api/documents/${documentId}/validate`).then((r) => r.data),
     reject: (documentId, motif) => client.patch(`/api/documents/${documentId}/reject`, { motif }).then((r) => r.data),
   };
@@ -41,7 +43,9 @@ export function createAdminApi(client) {
   return {
     listAgencies: () => client.get('/api/admin/agencies').then((r) => r.data),
     stats: () => client.get('/api/admin/stats').then((r) => r.data),
+    dashboard: (annee) => client.get('/api/admin/dashboard', { params: annee ? { annee } : {} }).then((r) => r.data),
     createAgency: (payload) => client.post('/api/admin/agencies', payload).then((r) => r.data),
+    updateOrganisation: (id, payload) => client.patch(`/api/admin/agencies/${id}/organisation`, payload).then((r) => r.data),
     deleteAgency: (id) => client.delete(`/api/admin/agencies/${id}`).then((r) => r.data),
     listEncadreurs: () => client.get('/api/admin/encadreurs').then((r) => r.data),
     createEncadreur: (payload) => client.post('/api/admin/encadreurs', payload).then((r) => r.data),
@@ -60,6 +64,20 @@ export function createGroupsApi(client) {
   };
 }
 
+export function createPaymentsApi(client) {
+  return {
+    list: (annee) => client.get('/api/paiements', { params: annee ? { annee } : {} }).then((r) => r.data),
+    create: (payload) => client.post('/api/paiements', payload).then((r) => r.data),
+    updateStatus: (id, statut) => client.patch(`/api/paiements/${id}/statut`, { statut }).then((r) => r.data),
+  };
+}
+
+export function createDashboardApi(client) {
+  return {
+    sidebarBadges: () => client.get('/api/dashboard/badges').then((r) => r.data),
+  };
+}
+
 export function createHajjApi(client) {
   return {
     auth: createAuthApi(client),
@@ -68,5 +86,7 @@ export function createHajjApi(client) {
     notifications: createNotificationsApi(client),
     admin: createAdminApi(client),
     groups: createGroupsApi(client),
+    payments: createPaymentsApi(client),
+    dashboard: createDashboardApi(client),
   };
 }

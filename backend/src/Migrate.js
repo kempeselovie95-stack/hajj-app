@@ -8,7 +8,24 @@ const compatibility = [
   `UPDATE dossiers SET statut='soumis' WHERE statut='en_attente'`,
   `UPDATE dossiers SET statut='en_verification' WHERE statut='en_cours'`,
   `ALTER TABLE dossiers MODIFY COLUMN statut ENUM('brouillon','soumis','en_verification','valide','transmis_nusuk','confirme','rejete','annule') NOT NULL DEFAULT 'brouillon'`,
+  `ALTER TABLE dossiers ADD COLUMN saison_id INT NULL`,
+  `ALTER TABLE dossiers ADD COLUMN forfait_id INT NULL`,
+  `ALTER TABLE agences ADD COLUMN legal_name VARCHAR(200) NULL`,
+  `ALTER TABLE agences ADD COLUMN country VARCHAR(100) NOT NULL DEFAULT 'Cameroun'`,
+  `ALTER TABLE agences ADD COLUMN city VARCHAR(100) NULL`,
+  `ALTER TABLE agences ADD COLUMN phone VARCHAR(30) NULL`,
+  `ALTER TABLE agences ADD COLUMN email VARCHAR(150) NULL`,
+  `ALTER TABLE agences ADD COLUMN logo VARCHAR(500) NULL`,
+  `ALTER TABLE agences ADD COLUMN status ENUM('ACTIVE','SUSPENDED','PENDING','ARCHIVED') NOT NULL DEFAULT 'ACTIVE'`,
+  `ALTER TABLE agences ADD COLUMN subscription_plan VARCHAR(50) NOT NULL DEFAULT 'STARTER'`,
+  `ALTER TABLE agences ADD COLUMN subscription_status ENUM('ACTIVE','TRIAL','PAST_DUE','CANCELLED') NOT NULL DEFAULT 'TRIAL'`,
+  `ALTER TABLE agences ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`,
+  `UPDATE agences a JOIN utilisateurs u ON u.id=a.utilisateur_id SET a.legal_name=COALESCE(a.legal_name,a.nom_agence),a.phone=COALESCE(a.phone,u.telephone),a.email=COALESCE(a.email,u.email)`,
   `ALTER TABLE documents MODIFY COLUMN type_document VARCHAR(60) NOT NULL`,
+  `ALTER TABLE documents ADD COLUMN statut ENUM('PENDING','UNDER_REVIEW','APPROVED','REJECTED','EXPIRED') NOT NULL DEFAULT 'PENDING'`,
+  `ALTER TABLE documents ADD COLUMN motif_rejet VARCHAR(1000) NULL`,
+  `ALTER TABLE documents ADD COLUMN expiration_date DATE NULL`,
+  `UPDATE documents SET statut=CASE WHEN est_valide=TRUE THEN 'APPROVED' WHEN est_valide=FALSE THEN 'REJECTED' ELSE 'PENDING' END WHERE statut='PENDING'`,
   `ALTER TABLE notifications MODIFY COLUMN type ENUM('succes','avertissement','erreur','statut_dossier','document_valide','document_rejete','info') DEFAULT 'info'`,
   `UPDATE notifications SET type='statut_dossier' WHERE type IN ('succes','avertissement','erreur')`,
   `ALTER TABLE notifications MODIFY COLUMN type ENUM('statut_dossier','document_valide','document_rejete','info') DEFAULT 'info'`,
@@ -23,7 +40,12 @@ const tables = [
 )`,
 `CREATE TABLE IF NOT EXISTS agences (
  id INT AUTO_INCREMENT PRIMARY KEY, utilisateur_id INT NOT NULL, nom_agence VARCHAR(200) NOT NULL,
- numero_agrement VARCHAR(50), adresse TEXT, cree_le TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+ numero_agrement VARCHAR(50), adresse TEXT, legal_name VARCHAR(200), country VARCHAR(100) NOT NULL DEFAULT 'Cameroun',
+ city VARCHAR(100), phone VARCHAR(30), email VARCHAR(150), logo VARCHAR(500),
+ status ENUM('ACTIVE','SUSPENDED','PENDING','ARCHIVED') NOT NULL DEFAULT 'ACTIVE',
+ subscription_plan VARCHAR(50) NOT NULL DEFAULT 'STARTER',
+ subscription_status ENUM('ACTIVE','TRIAL','PAST_DUE','CANCELLED') NOT NULL DEFAULT 'TRIAL',
+ cree_le TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
  FOREIGN KEY (utilisateur_id) REFERENCES utilisateurs(id) ON DELETE CASCADE
 )`,
 `CREATE TABLE IF NOT EXISTS encadreurs (
@@ -41,7 +63,9 @@ const tables = [
 )`,
 `CREATE TABLE IF NOT EXISTS documents (
  id INT AUTO_INCREMENT PRIMARY KEY, dossier_id INT NOT NULL, type_document VARCHAR(60) NOT NULL, nom_fichier VARCHAR(255) NOT NULL,
- chemin_fichier VARCHAR(500) NOT NULL, taille_octets INT, est_valide BOOLEAN DEFAULT NULL, valide_par INT, valide_le TIMESTAMP NULL,
+ chemin_fichier VARCHAR(500) NOT NULL, taille_octets INT, est_valide BOOLEAN DEFAULT NULL,
+ statut ENUM('PENDING','UNDER_REVIEW','APPROVED','REJECTED','EXPIRED') NOT NULL DEFAULT 'PENDING',
+ motif_rejet VARCHAR(1000), expiration_date DATE, valide_par INT, valide_le TIMESTAMP NULL,
  cree_le TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY uq_document_type (dossier_id,type_document),
  FOREIGN KEY (dossier_id) REFERENCES dossiers(id) ON DELETE CASCADE, FOREIGN KEY (valide_par) REFERENCES utilisateurs(id) ON DELETE SET NULL
 )`,
@@ -53,6 +77,26 @@ const tables = [
 `CREATE TABLE IF NOT EXISTS historique_statuts (
  id INT AUTO_INCREMENT PRIMARY KEY, dossier_id INT NOT NULL, statut VARCHAR(50) NOT NULL, commentaire TEXT, modifie_par INT,
  cree_le TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (dossier_id) REFERENCES dossiers(id) ON DELETE CASCADE, FOREIGN KEY (modifie_par) REFERENCES utilisateurs(id) ON DELETE SET NULL
+)`,
+`CREATE TABLE IF NOT EXISTS saisons_hajj (
+ id INT AUTO_INCREMENT PRIMARY KEY, libelle VARCHAR(120) NOT NULL, annee YEAR NOT NULL,
+ date_debut DATE, date_fin DATE, description TEXT, est_active BOOLEAN NOT NULL DEFAULT TRUE,
+ cree_le TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY uq_saison_annee (annee)
+)`,
+`CREATE TABLE IF NOT EXISTS forfaits (
+ id INT AUTO_INCREMENT PRIMARY KEY, saison_id INT NOT NULL, nom VARCHAR(120) NOT NULL,
+ description TEXT, prix DECIMAL(12,2) NOT NULL, devise VARCHAR(10) NOT NULL DEFAULT 'XAF',
+ inclus TEXT, est_actif BOOLEAN NOT NULL DEFAULT TRUE, cree_le TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+ FOREIGN KEY (saison_id) REFERENCES saisons_hajj(id) ON DELETE CASCADE, UNIQUE KEY uq_forfait_saison_nom (saison_id, nom)
+)`,
+`CREATE TABLE IF NOT EXISTS paiements (
+ id INT AUTO_INCREMENT PRIMARY KEY, dossier_id INT NOT NULL, forfait_id INT NULL,
+ montant DECIMAL(12,2) NOT NULL, devise VARCHAR(10) NOT NULL DEFAULT 'XAF',
+ statut ENUM('en_attente','valide','rejete','annule') NOT NULL DEFAULT 'en_attente',
+ moyen_paiement VARCHAR(50), reference VARCHAR(120), commentaire TEXT,
+ cree_le TIMESTAMP DEFAULT CURRENT_TIMESTAMP, confirme_le TIMESTAMP NULL,
+ FOREIGN KEY (dossier_id) REFERENCES dossiers(id) ON DELETE CASCADE,
+ FOREIGN KEY (forfait_id) REFERENCES forfaits(id) ON DELETE SET NULL
 )`,
 `CREATE TABLE IF NOT EXISTS groupes_pelerins (
  id INT AUTO_INCREMENT PRIMARY KEY, nom VARCHAR(150) NOT NULL, annee_hajj YEAR NOT NULL,

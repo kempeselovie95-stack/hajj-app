@@ -1,6 +1,6 @@
 /**
  * Point d'entrée du serveur Express
- * Hajj App — Backend API REST
+ * MyHajj237 — Backend API REST
  */
 
 require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') });
@@ -21,6 +21,9 @@ const notificationsRoutes = require('./routes/notifications');
 const documentsRoutes = require('./routes/documents');
 const adminRoutes = require('./routes/admin');
 const groupsRoutes = require('./routes/groups');
+const catalogRoutes = require('./routes/catalog');
+const paymentsRoutes = require('./routes/payments');
+const dashboardRoutes = require('./routes/dashboard');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -76,7 +79,7 @@ app.use('/uploads', express.static(path.resolve(__dirname, '../uploads')));
 app.get('/api/health', (req, res) => {
   res.json({
     succes: true,
-    message: 'API Hajj Cameroun opérationnelle 🕌',
+    message: 'API MyHajj237 Cameroun opérationnelle 🕌',
     version: '1.0.0',
     timestamp: new Date().toISOString(),
   });
@@ -89,6 +92,9 @@ app.use('/api/notifications', notificationsRoutes);
 app.use('/api/documents', documentsRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/groups', groupsRoutes);
+app.use('/api/catalog', catalogRoutes);
+app.use('/api/paiements', paymentsRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 // ── Route 404 ─────────────────────────────────────────────────────────────────
 app.use((req, res) => {
@@ -102,7 +108,7 @@ app.use(gererErreur);
 const demarrer = async () => {
   await testConnection();
   app.listen(PORT, () => {
-    console.log(`\n🕌 Serveur Hajj App démarré`);
+    console.log(`\n🕌 Serveur MyHajj237 démarré`);
     console.log(`   → http://localhost:${PORT}/api/health\n`);
   });
 };

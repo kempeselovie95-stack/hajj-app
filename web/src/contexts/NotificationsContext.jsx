@@ -6,12 +6,14 @@ const NotificationsContext = createContext(null);
 export function NotificationsProvider({ children }) {
   const { api, isAuthenticated } = useAuth();
   const [notifications, setNotifications] = useState([]);
+  const [unreadTotal, setUnreadTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     let mounted = true;
     if (!isAuthenticated) {
       setNotifications([]);
+      setUnreadTotal(0);
       setIsLoading(false);
       return () => { mounted = false; };
     }
@@ -21,9 +23,10 @@ export function NotificationsProvider({ children }) {
       .then((data) => {
         if (!mounted) return;
         setNotifications((data.notifications ?? []).map(normalizeNotification));
+        setUnreadTotal(Number(data.non_lues ?? (data.notifications ?? []).filter((item) => !item.est_lue).length));
       })
       .catch(() => {
-        if (mounted) setNotifications([]);
+        if (mounted) { setNotifications([]); setUnreadTotal(0); }
       })
       .finally(() => {
         if (mounted) setIsLoading(false);
@@ -35,15 +38,18 @@ export function NotificationsProvider({ children }) {
     return () => { mounted = false; window.clearInterval(interval); };
   }, [api, isAuthenticated]);
 
-  const unreadCount = useMemo(() => notifications.filter((n) => !n.lue).length, [notifications]);
+  const unreadCount = unreadTotal;
 
   async function markAsRead(id) {
+    const wasUnread = notifications.some((notification) => notification.id === id && !notification.lue);
     setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, lue: true } : n)));
+    if (wasUnread) setUnreadTotal((count) => Math.max(0, count - 1));
     await api.notifications.markAsRead(id);
   }
 
   async function markAllAsRead() {
     setNotifications((prev) => prev.map((n) => ({ ...n, lue: true })));
+    setUnreadTotal(0);
     await api.notifications.markAllAsRead();
   }
 

@@ -11,13 +11,27 @@ export default function GroupChatPage() {
   const [media, setMedia] = useState(null);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
   const fileRef = useRef(null);
+  const bottomRef = useRef(null);
 
   useEffect(() => {
-    Promise.all([api.groups.getById(id), api.groups.listMessages(id)])
-      .then(([groupData, messageData]) => { setGroup(groupData.groupe); setMessages(messageData.messages ?? []); })
-      .finally(() => setLoading(false));
+    let active = true;
+    const refreshMessages = () => api.groups.listMessages(id)
+      .then((messageData) => { if (active) setMessages(messageData.messages ?? []); })
+      .catch(() => { if (active) setError('La récupération des messages a échoué.'); });
+
+    Promise.all([api.groups.getById(id), refreshMessages()])
+      .then(([groupData]) => { if (active) setGroup(groupData.groupe); })
+      .catch(() => { if (active) setError('Groupe introuvable ou accès refusé.'); })
+      .finally(() => { if (active) setLoading(false); });
+    const interval = window.setInterval(refreshMessages, 5000);
+    return () => { active = false; window.clearInterval(interval); };
   }, [api, id]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [messages]);
 
   async function sendMessage(event) {
     event.preventDefault();
@@ -31,20 +45,40 @@ export default function GroupChatPage() {
       const data = await api.groups.listMessages(id);
       setMessages(data.messages ?? []);
       setContent(''); setMedia(null);
+      setError('');
       if (fileRef.current) fileRef.current.value = '';
+    } catch {
+      setError('Le message n’a pas pu être envoyé. Réessaie.');
     } finally { setSending(false); }
   }
 
-  if (loading) return <p className="font-body text-text-secondary">Loading chat...</p>;
-  if (!group) return <p className="font-body text-danger">Group not found or access denied.</p>;
+  if (loading) return <p className="text-sm text-slate-500">Chargement de la conversation…</p>;
+  if (!group) return <p role="alert" className="text-sm text-red-700">{error || 'Groupe introuvable ou accès refusé.'}</p>;
 
   return (
-    <section className="mx-auto flex max-w-4xl flex-col gap-5">
-      <Link to="/encadreur/dashboard" className="font-body text-sm text-text-secondary hover:text-primary">← Back to groups</Link>
-      <header><p className="font-mono text-xs uppercase tracking-[0.2em] text-accent">Group chat</p><h1 className="mt-2 font-display text-3xl font-semibold text-text-primary">{group.nom}</h1><p className="mt-1 text-sm text-text-secondary">{group.membres.length} pilgrims · {group.annee_hajj}</p></header>
-      <div className="card flex min-h-[28rem] flex-col">
-        <div className="flex-1 space-y-3 overflow-y-auto pb-5">{messages.length === 0 ? <p className="py-12 text-center text-sm text-text-secondary">No messages yet. Share the first update with your group.</p> : messages.map((message) => <article key={message.id} className={`max-w-[85%] rounded-lg border p-3 ${message.expediteur_id === user.id ? 'ml-auto border-primary-tint bg-primary-tint' : 'border-border bg-surface-muted'}`}><p className="text-xs font-semibold text-text-secondary">{message.expediteur_nom}</p>{message.contenu && <p className="mt-1 whitespace-pre-wrap text-sm text-text-primary">{message.contenu}</p>}{message.media_url && <a className="mt-2 block text-sm font-semibold text-primary underline" href={message.media_url} target="_blank" rel="noreferrer">{message.media_nom || 'Open media'}</a>}<time className="mt-2 block text-[11px] text-text-secondary">{new Date(message.cree_le).toLocaleString()}</time></article>)}</div>
-        <form onSubmit={sendMessage} className="border-t border-border pt-4"><textarea value={content} onChange={(event) => setContent(event.target.value)} rows={2} placeholder="Write an update for your pilgrims..." className="input-field resize-none" /><div className="mt-3 flex flex-wrap items-center justify-between gap-3"><label className="cursor-pointer text-sm font-medium text-primary"><input ref={fileRef} type="file" accept="image/*,application/pdf,video/*" className="sr-only" onChange={(event) => setMedia(event.target.files?.[0] ?? null)} />{media ? media.name : 'Attach photo, PDF or video'}</label><button className="btn-primary" disabled={sending}>{sending ? 'Sending...' : 'Send message'}</button></div></form>
+    <section className="mx-auto flex min-h-[calc(100dvh-2rem)] max-w-5xl flex-col gap-4">
+      <Link to="/encadreur/groupes" className="text-sm text-slate-500 hover:text-emerald-800">← Retour aux groupes</Link>
+      <header><p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700">Discussion du groupe</p><h1 className="mt-1 text-2xl font-semibold text-slate-900">{group.nom}</h1><p className="mt-1 text-sm text-slate-500">{group.membres.length} pèlerins · Hajj {group.annee_hajj}</p></header>
+      {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+      <div className="flex min-h-[24rem] flex-1 flex-col rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pb-5" aria-live="polite">{messages.length === 0 ? <p className="py-12 text-center text-sm text-slate-500">Aucun message. Envoyez la première information au groupe.</p> : messages.map((message) => {
+          const mediaUrl = message.media_url?.startsWith('http') ? message.media_url : message.media_url;
+          return <article key={message.id} className={`max-w-[92%] rounded-xl border p-3 sm:max-w-[78%] ${Number(message.expediteur_id) === Number(user.id) ? 'ml-auto border-emerald-100 bg-emerald-50' : 'border-slate-200 bg-slate-50'}`}>
+            <p className="text-xs font-semibold text-slate-500">{message.expediteur_nom}</p>
+            {message.contenu && <p className="mt-1 whitespace-pre-wrap break-words text-sm text-slate-800">{message.contenu}</p>}
+            {message.media_url && <div className="mt-2">
+              {message.media_type?.startsWith('image/') ? <a href={mediaUrl} target="_blank" rel="noreferrer"><img src={mediaUrl} alt={message.media_nom || 'Image partagée dans le groupe'} loading="lazy" className="max-h-72 max-w-full rounded-lg object-contain" /></a>
+                : message.media_type?.startsWith('video/') ? <video src={mediaUrl} controls preload="metadata" className="max-h-72 max-w-full rounded-lg" />
+                  : <a className="inline-flex items-center gap-2 text-sm font-medium text-emerald-800 underline" href={mediaUrl} target="_blank" rel="noreferrer" download={message.media_nom}>{message.media_nom || 'Ouvrir le document'}</a>}
+            </div>}
+            <time className="mt-2 block text-[11px] text-slate-400">{new Date(message.cree_le).toLocaleString('fr-FR')}</time>
+          </article>;
+        })}<div ref={bottomRef} /></div>
+        <form onSubmit={sendMessage} className="border-t border-slate-200 pt-4">
+          <label htmlFor="group-message" className="sr-only">Message aux pèlerins</label>
+          <textarea id="group-message" value={content} onChange={(event) => setContent(event.target.value)} rows={2} placeholder="Écrire un message au groupe…" className="w-full resize-y rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-700 focus:ring-2 focus:ring-emerald-100" />
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3"><label className="cursor-pointer text-sm font-medium text-emerald-800"><input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp,application/pdf,video/mp4,video/quicktime,video/webm" className="sr-only" onChange={(event) => setMedia(event.target.files?.[0] ?? null)} />{media ? media.name : 'Joindre une photo, vidéo ou PDF'}</label><button type="submit" className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-50" disabled={sending || (!content.trim() && !media)}>{sending ? 'Envoi…' : 'Envoyer'}</button></div>
+        </form>
       </div>
     </section>
   );

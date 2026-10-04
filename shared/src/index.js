@@ -3,3 +3,4 @@ export * from './validators/index.js';
 export * from './api/index.js';
 export * from './dossierHelpers.js';
 export * from './formatters.js';
+export * from './translations.js';

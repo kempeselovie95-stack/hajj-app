@@ -42,6 +42,71 @@ const creerAgence = async (req, res, next) => {
   } finally { connection.release(); }
 };
 
+const creerPelerinAvecDossier = async (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) return res.status(400).json({ succes: false, erreurs: errors.array() });
+  const connection = await pool.getConnection();
+  try {
+    const { nom, prenom, email, telephone, mot_de_passe, saison_id, forfait_id, agence_id = null } = req.body;
+    await connection.beginTransaction();
+    const [seasonRows] = await connection.execute('SELECT id,annee FROM saisons_hajj WHERE id=?', [saison_id]);
+    const season = seasonRows[0];
+    if (!season) {
+      await connection.rollback();
+      return res.status(400).json({ succes: false, message: 'Saison Hajj introuvable.' });
+    }
+    const [packageRows] = await connection.execute(
+      'SELECT id,saison_id FROM forfaits WHERE id=? AND est_actif=TRUE',
+      [forfait_id]
+    );
+    const selectedPackage = packageRows[0];
+    if (!selectedPackage || Number(selectedPackage.saison_id) !== Number(season.id)) {
+      await connection.rollback();
+      return res.status(400).json({ succes: false, message: 'Le forfait doit appartenir à la saison sélectionnée.' });
+    }
+    if (agence_id) {
+      const [agencyRows] = await connection.execute('SELECT id FROM agences WHERE id=?', [agence_id]);
+      if (!agencyRows.length) {
+        await connection.rollback();
+        return res.status(400).json({ succes: false, message: 'Organisation introuvable.' });
+      }
+    }
+
+    const [userResult] = await connection.execute(
+      `INSERT INTO utilisateurs (nom,prenom,email,telephone,mot_de_passe,role)
+       VALUES (?,?,?,?,?,'pelerin')`,
+      [nom.trim(), prenom.trim(), email.toLowerCase().trim(), telephone?.trim() || null, await bcrypt.hash(mot_de_passe, 12)]
+    );
+    const numeroDossier = `DOS-${season.annee}-${String(userResult.insertId).padStart(6, '0')}`;
+    const [dossierResult] = await connection.execute(
+      `INSERT INTO dossiers (pelerin_id,agence_id,numero_dossier,annee_hajj,statut,type_package,saison_id,forfait_id)
+       VALUES (?,?,?,?,'brouillon','standard',?,?)`,
+      [userResult.insertId, agence_id, numeroDossier, season.annee, season.id, selectedPackage.id]
+    );
+    await connection.execute(
+      `INSERT INTO historique_statuts (dossier_id,statut,commentaire,modifie_par)
+       VALUES (?,'brouillon','Dossier créé par l’administration',?)`,
+      [dossierResult.insertId, req.utilisateur.id]
+    );
+    await connection.execute(
+      `INSERT INTO notifications (destinataire_id,titre,corps,type)
+       VALUES (?, 'Compte et dossier créés', ?, 'info')`,
+      [userResult.insertId, `Votre compte pèlerin est prêt. Votre dossier ${numeroDossier} a été créé pour la saison Hajj ${season.annee}.`]
+    );
+    await connection.commit();
+    res.status(201).json({
+      succes: true,
+      pelerin_id: userResult.insertId,
+      dossier_id: dossierResult.insertId,
+      numero_dossier: numeroDossier,
+    });
+  } catch (error) {
+    await connection.rollback();
+    if (error.code === 'ER_DUP_ENTRY') return res.status(409).json({ succes: false, message: 'Cette adresse email est déjà utilisée.' });
+    next(error);
+  } finally { connection.release(); }
+};
+
 const modifierOrganisation = async (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) return res.status(400).json({ succes: false, erreurs: errors.array() });
@@ -150,9 +215,10 @@ const obtenirDashboard = async (req, res, next) => {
          WHERE balance_d.annee_hajj=? AND f.prix>COALESCE(paid.total_paye,0)) AS pelerins_avec_solde,
         (SELECT COUNT(*) FROM groupes_pelerins g WHERE g.annee_hajj=?) AS groupes_formes,
         (SELECT COUNT(*) FROM groupes_pelerins g WHERE g.annee_hajj=? AND g.encadreur_id IS NULL) AS groupes_sans_guide,
+        (SELECT COUNT(DISTINCT gm.pelerin_id) FROM groupe_membres gm JOIN groupes_pelerins g ON g.id=gm.groupe_id WHERE g.annee_hajj=?) AS pelerins_affectes,
         (SELECT COUNT(*) FROM encadreurs e JOIN utilisateurs u ON u.id=e.utilisateur_id WHERE u.est_actif=TRUE) AS guides_actifs
        FROM dossiers d WHERE d.annee_hajj=?`,
-      Array(9).fill(year)
+      Array(10).fill(year)
     );
 
     const [statuses] = await pool.execute(
@@ -221,4 +287,4 @@ const supprimerAgence = async (req, res, next) => {
   } catch (error) { await connection.rollback(); next(error); } finally { connection.release(); }
 };
 
-module.exports = { listerAgences, creerAgence, modifierOrganisation, listerEncadreurs, creerEncadreur, obtenirStatistiques, obtenirDashboard, supprimerEncadreur, supprimerAgence };
+module.exports = { listerAgences, creerAgence, creerPelerinAvecDossier, modifierOrganisation, listerEncadreurs, creerEncadreur, obtenirStatistiques, obtenirDashboard, supprimerEncadreur, supprimerAgence };

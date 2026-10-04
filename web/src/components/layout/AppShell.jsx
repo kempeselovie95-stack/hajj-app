@@ -1,10 +1,19 @@
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 import { NotificationsProvider, useNotifications } from '../../contexts/NotificationsContext.jsx';
 import { useLanguage } from '../../contexts/LanguageContext.jsx';
 
 const NAV_GROUPS = {
+  pelerin: [
+    {
+      title: 'PRINCIPAL',
+      links: [
+        { to: '/dashboard', key: 'dashboard', label: 'Tableau de bord' },
+        { to: '/pelerin/profile', key: 'profile', label: 'Mon compte' },
+      ],
+    },
+  ],
   admin: [
     {
       title: 'PRINCIPAL',
@@ -170,6 +179,13 @@ function AppShellContent() {
     encadreur: '/encadreur/profile',
     pelerin: '/pelerin/profile',
   }[user?.role] ?? '/admin/profile';
+  const roleLabel = {
+    admin: t('roleAdmin'),
+    agence: t('roleAgency'),
+    encadreur: t('roleGuide'),
+    pelerin: t('rolePilgrim'),
+  }[user?.role] ?? t('rolePilgrim');
+  const userInitials = `${user?.prenom?.[0] || ''}${user?.nom?.[0] || ''}`.toUpperCase() || 'U';
   const notificationRoute = {
     admin: '/admin/notifications',
     agence: '/agence/notifications',
@@ -257,7 +273,7 @@ function AppShellContent() {
 
           <div className="shrink-0 border-t border-[#e4e8ee] p-4">
             <div className="flex items-center gap-2 rounded-xl bg-[#f0f2f5] p-2.5">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#2b3f4d] text-sm font-semibold text-white">IA</div>
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#2b3f4d] text-sm font-semibold text-white">{userInitials}</div>
               <button
                 type="button"
                 onClick={() => navigate(profileRoute)}
@@ -265,7 +281,7 @@ function AppShellContent() {
                 aria-label="Ouvrir la gestion du compte"
               >
                 <span className="block truncate text-[14px] font-semibold text-slate-700">{user?.prenom || 'Ibrahim'} {user?.nom || 'Amadou'}</span>
-                <span className="block truncate text-[11px] text-slate-500">Administrateur système</span>
+                <span className="block truncate text-[11px] text-slate-500">{roleLabel}</span>
               </button>
               <button
                 type="button"

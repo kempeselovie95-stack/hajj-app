@@ -1,7 +1,7 @@
 const express = require('express');
 const { body, query } = require('express-validator');
 const { authentifier, autoriser } = require('../middleware/Auth');
-const { listerAgences, creerAgence, modifierOrganisation, listerEncadreurs, creerEncadreur, obtenirStatistiques, obtenirDashboard, supprimerEncadreur, supprimerAgence } = require('../controllers/adminController');
+const { listerAgences, creerAgence, creerPelerinAvecDossier, modifierOrganisation, listerEncadreurs, creerEncadreur, obtenirStatistiques, obtenirDashboard, supprimerEncadreur, supprimerAgence } = require('../controllers/adminController');
 
 const router = express.Router();
 router.use(authentifier, autoriser('admin'));
@@ -16,6 +16,16 @@ const accountRules = [
 router.get('/agencies', listerAgences);
 router.get('/stats', obtenirStatistiques);
 router.get('/dashboard', query('annee').optional().isInt({ min: 2000, max: 2100 }), obtenirDashboard);
+router.post('/pelerins', [
+  body('nom').trim().notEmpty().isLength({ max: 100 }),
+  body('prenom').trim().notEmpty().isLength({ max: 100 }),
+  body('email').isEmail().normalizeEmail(),
+  body('telephone').optional({ values: 'null' }).trim().isLength({ max: 20 }),
+  body('mot_de_passe').isLength({ min: 8 }).withMessage('Mot de passe : 8 caractères minimum.'),
+  body('saison_id').isInt({ min: 1 }),
+  body('forfait_id').isInt({ min: 1 }),
+  body('agence_id').optional({ values: 'null' }).isInt({ min: 1 }),
+], creerPelerinAvecDossier);
 router.post('/agencies', accountRules.concat(body('nom_agence').trim().notEmpty().withMessage('Nom agence requis')), creerAgence);
 router.patch('/agencies/:id/organisation', [
   body('name').optional().trim().notEmpty(),

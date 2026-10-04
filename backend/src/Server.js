@@ -73,7 +73,11 @@ if (process.env.NODE_ENV !== 'production') {
 
 // ── Fichiers statiques (documents uploadés) ───────────────────────────────────
 const path = require('path');
-app.use('/uploads', express.static(path.resolve(__dirname, '../uploads')));
+app.use('/uploads', express.static(path.resolve(__dirname, 'uploads'), {
+  setHeaders(response, filePath) {
+    if (path.extname(filePath).toLowerCase() === '.jfif') response.setHeader('Content-Type', 'image/jpeg');
+  },
+}));
 
 // ── Route de santé ────────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {

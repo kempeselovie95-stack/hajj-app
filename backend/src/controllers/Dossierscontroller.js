@@ -38,9 +38,15 @@ const listerDossiers = async (req,res,next)=>{try{
   else if(role==='encadreur'){where='WHERE d.pelerin_id IN (SELECT gm.pelerin_id FROM groupe_membres gm JOIN groupes_pelerins g ON g.id=gm.groupe_id WHERE g.encadreur_id=?)';params.push(id);}
   if(req.query.statut){where += where?' AND d.statut=?':'WHERE d.statut=?';params.push(req.query.statut);}
   const offset=(page-1)*limite;
-  const [dossiers]=await pool.execute(`SELECT d.id,d.numero_dossier,d.annee_hajj,d.statut,d.type_package,d.date_depart,d.date_retour,d.cree_le,
-    CONCAT(u.prenom,' ',u.nom) AS pelerin_nom,u.email AS pelerin_email,u.telephone,a.nom_agence
-    FROM dossiers d JOIN utilisateurs u ON u.id=d.pelerin_id LEFT JOIN agences a ON a.id=d.agence_id ${where} ORDER BY d.cree_le DESC LIMIT ${limite} OFFSET ${offset}`,params);
+  const [dossiers]=await pool.execute(`SELECT d.id,d.numero_dossier,d.annee_hajj,d.statut,d.type_package,d.date_depart,d.date_retour,d.cree_le,d.forfait_id,d.saison_id,
+    CONCAT(u.prenom,' ',u.nom) AS pelerin_nom,u.email AS pelerin_email,u.telephone,a.nom_agence,f.nom AS forfait,f.prix AS prix_forfait,
+    COALESCE((SELECT SUM(p.montant) FROM paiements p WHERE p.dossier_id=d.id AND p.statut='valide'),0) AS montant_paye,
+    GREATEST(COALESCE(f.prix,0)-COALESCE((SELECT SUM(p.montant) FROM paiements p WHERE p.dossier_id=d.id AND p.statut='valide'),0),0) AS solde_restant,
+    (SELECT COUNT(*) FROM documents doc WHERE doc.dossier_id=d.id) AS total_documents,
+    (SELECT COUNT(*) FROM documents doc WHERE doc.dossier_id=d.id AND doc.statut='APPROVED') AS documents_approuves,
+    (SELECT doc.statut FROM documents doc WHERE doc.dossier_id=d.id AND doc.type_document='visa' ORDER BY doc.cree_le DESC LIMIT 1) AS visa_status,
+    (SELECT g.nom FROM groupe_membres gm JOIN groupes_pelerins g ON g.id=gm.groupe_id WHERE gm.pelerin_id=d.pelerin_id AND g.annee_hajj=d.annee_hajj ORDER BY g.cree_le DESC LIMIT 1) AS groupe
+    FROM dossiers d JOIN utilisateurs u ON u.id=d.pelerin_id LEFT JOIN agences a ON a.id=d.agence_id LEFT JOIN forfaits f ON f.id=d.forfait_id ${where} ORDER BY d.cree_le DESC LIMIT ${limite} OFFSET ${offset}`,params);
   const [count]=await pool.execute(`SELECT COUNT(*) AS total FROM dossiers d ${where}`,params);
   res.json({succes:true,dossiers,pagination:{page,limite,total:Number(count[0].total),totalPages:Math.ceil(Number(count[0].total)/limite)}});
 }catch(e){next(e)}};

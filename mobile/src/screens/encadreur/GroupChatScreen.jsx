@@ -99,7 +99,12 @@ export default function GroupChatScreen() {
     <View style={styles.composer}>
       <View style={styles.composerMain}>
         <TextInput value={content} onChangeText={setContent} placeholder="Écrire un message…" style={styles.input} multiline />
-        {media ? <Text numberOfLines={1} style={styles.selectedMedia}>{media.name}</Text> : null}
+        {media ? <View style={styles.preview}>
+          {media.type.startsWith('image/') ? <Image source={{ uri: media.uri }} accessibilityLabel={`Aperçu : ${media.name}`} style={styles.previewImage} resizeMode="cover" />
+            : <View style={styles.previewFile}><Text style={styles.previewFileType}>{media.type.startsWith('video/') ? 'VIDÉO' : 'DOCUMENT'}</Text></View>}
+          <View style={styles.previewInfo}><Text style={styles.previewTitle}>Aperçu avant envoi</Text><Text numberOfLines={1} style={styles.selectedMedia}>{media.name}</Text></View>
+          <Pressable onPress={() => setMedia(null)} accessibilityLabel="Retirer le média sélectionné" style={styles.removeButton}><Text style={styles.remove}>×</Text></Pressable>
+        </View> : null}
         <View style={styles.actions}>
           <Pressable onPress={chooseMedia} accessibilityLabel="Joindre un média" style={styles.attach}><Text style={styles.attachText}>{media ? 'Changer le fichier' : '+ Joindre un média'}</Text></Pressable>
           {media ? <Pressable onPress={() => setMedia(null)} accessibilityLabel="Retirer la pièce jointe"><Text style={styles.remove}>Retirer</Text></Pressable> : null}
@@ -126,9 +131,16 @@ const styles = StyleSheet.create({
   composerMain: { flex: 1, minWidth: 0 },
   input: { minHeight: 44, maxHeight: 110, borderWidth: 1, borderColor: THEME.colors.border, borderRadius: THEME.radius.sm, padding: 10, color: THEME.colors.textPrimary },
   selectedMedia: { color: THEME.colors.textSecondary, fontSize: THEME.typography.sizes.xs, marginTop: 6 },
+  preview: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 8, padding: 8, borderRadius: THEME.radius.md, backgroundColor: THEME.colors.primaryTint },
+  previewImage: { width: 64, height: 56, borderRadius: THEME.radius.sm, backgroundColor: THEME.colors.surface },
+  previewFile: { width: 64, height: 56, alignItems: 'center', justifyContent: 'center', borderRadius: THEME.radius.sm, backgroundColor: THEME.colors.surface },
+  previewFileType: { color: THEME.colors.primary, fontFamily: FONTS.bodySemibold, fontSize: THEME.typography.sizes.xs },
+  previewInfo: { flex: 1, minWidth: 0 },
+  previewTitle: { color: THEME.colors.primary, fontFamily: FONTS.bodySemibold, fontSize: THEME.typography.sizes.xs },
   actions: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
   attach: { paddingVertical: 4, paddingRight: 8 },
   attachText: { color: THEME.colors.primary, fontFamily: FONTS.bodyMedium, fontSize: THEME.typography.sizes.xs },
+  removeButton: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center', borderRadius: THEME.radius.sm, backgroundColor: THEME.colors.surface },
   remove: { color: THEME.colors.danger, fontSize: THEME.typography.sizes.xs },
   button: { backgroundColor: THEME.colors.primary, paddingVertical: 12, paddingHorizontal: 16, borderRadius: THEME.radius.sm },
   disabled: { opacity: 0.5 },

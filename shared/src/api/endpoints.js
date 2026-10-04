@@ -44,6 +44,7 @@ export function createAdminApi(client) {
     listAgencies: () => client.get('/api/admin/agencies').then((r) => r.data),
     stats: () => client.get('/api/admin/stats').then((r) => r.data),
     dashboard: (annee) => client.get('/api/admin/dashboard', { params: annee ? { annee } : {} }).then((r) => r.data),
+    createPilgrim: (payload) => client.post('/api/admin/pelerins', payload).then((r) => r.data),
     createAgency: (payload) => client.post('/api/admin/agencies', payload).then((r) => r.data),
     updateOrganisation: (id, payload) => client.patch(`/api/admin/agencies/${id}/organisation`, payload).then((r) => r.data),
     deleteAgency: (id) => client.delete(`/api/admin/agencies/${id}`).then((r) => r.data),
@@ -56,9 +57,14 @@ export function createAdminApi(client) {
 export function createGroupsApi(client) {
   return {
     list: () => client.get('/api/groups').then((r) => r.data),
+    listGuides: () => client.get('/api/groups/guides').then((r) => r.data),
+    listPilgrims: (annee_hajj, agence_id) => client.get('/api/groups/pelerins', { params: { annee_hajj, agence_id } }).then((r) => r.data),
     getById: (id) => client.get(`/api/groups/${id}`).then((r) => r.data),
     create: (payload) => client.post('/api/groups', payload).then((r) => r.data),
+    update: (id, payload) => client.patch(`/api/groups/${id}`, payload).then((r) => r.data),
     addMember: (id, pelerinId) => client.post(`/api/groups/${id}/members`, { pelerin_id: pelerinId }).then((r) => r.data),
+    removeMember: (id, pelerinId) => client.delete(`/api/groups/${id}/members/${pelerinId}`).then((r) => r.data),
+    moveMember: (targetGroupId, pelerinId, sourceGroupId) => client.post(`/api/groups/${targetGroupId}/members/${pelerinId}/move`, { source_groupe_id: sourceGroupId }).then((r) => r.data),
     listMessages: (id) => client.get(`/api/groups/${id}/messages`).then((r) => r.data),
     sendMessage: (id, formData) => client.post(`/api/groups/${id}/messages`, formData).then((r) => r.data),
   };
@@ -78,6 +84,16 @@ export function createDashboardApi(client) {
   };
 }
 
+export function createCatalogApi(client) {
+  return {
+    dashboard: () => client.get('/api/catalog/dashboard').then((r) => r.data),
+    listSeasons: () => client.get('/api/catalog/saisons').then((r) => r.data),
+    createSeason: (payload) => client.post('/api/catalog/saisons', payload).then((r) => r.data),
+    listPackages: () => client.get('/api/catalog/forfaits').then((r) => r.data),
+    createPackage: (payload) => client.post('/api/catalog/forfaits', payload).then((r) => r.data),
+  };
+}
+
 export function createHajjApi(client) {
   return {
     auth: createAuthApi(client),
@@ -88,5 +104,6 @@ export function createHajjApi(client) {
     groups: createGroupsApi(client),
     payments: createPaymentsApi(client),
     dashboard: createDashboardApi(client),
+    catalog: createCatalogApi(client),
   };
 }

@@ -88,7 +88,7 @@ export default function AdminDashboardPage() {
         <MetricCard label="Paiements reçus" value={formatCurrency(metrics.paiements_recus)} detail="Total des paiements validés" tone="plain" icon="wallet" loading={loading} />
         <MetricCard label="Solde restant" value={formatCurrency(metrics.solde_restant)} detail={`${formatNumber(metrics.pelerins_avec_solde)} pèlerins avec un solde`} tone="yellow" icon="alert" loading={loading} />
         <MetricCard label="Dossiers enregistrés" value={formatNumber(totalDossiers)} detail="Pour la saison sélectionnée" tone="plain" icon="documents" loading={loading} />
-        <MetricCard label="Groupes formés" value={formatNumber(metrics.groupes_formes)} detail={`${formatNumber(metrics.groupes_sans_guide)} sans guide assigné`} tone="plain" icon="people" loading={loading} />
+        <MetricCard label="Groupes formés" value={formatNumber(metrics.groupes_formes)} detail={`${formatNumber(metrics.pelerins_affectes)} pèlerins répartis · ${formatNumber(metrics.groupes_sans_guide)} sans guide`} tone="plain" icon="people" loading={loading} />
         <MetricCard label="Guides actifs" value={formatNumber(metrics.guides_actifs)} detail="Comptes actifs enregistrés" tone="plain" icon="guide" loading={loading} />
       </section>
 

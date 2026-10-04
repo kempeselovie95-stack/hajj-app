@@ -5,9 +5,11 @@ import { useAuth } from '../../contexts/AuthContext.jsx';
 import FormField from '../../components/common/FormField.jsx';
 import GeometricPattern from '../../components/common/GeometricPattern.jsx';
 import LanguageSelector from '../../components/common/LanguageSelector.jsx';
+import { useLanguage } from '../../contexts/LanguageContext.jsx';
 
 export default function LoginPage() {
   const { login } = useAuth();
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -29,8 +31,12 @@ export default function LoginPage() {
     setServerError(null);
 
     const validation = validateLoginForm(form);
-    setErrors(validation);
-    if (!isFormValid(validation)) return;
+    const localizedValidation = {
+      email: validation.email ? (form.email.trim() ? 'invalidEmail' : 'emailRequired') : null,
+      password: form.password ? null : 'passwordRequired',
+    };
+    setErrors(localizedValidation);
+    if (!isFormValid(localizedValidation)) return;
 
     setIsSubmitting(true);
     try {
@@ -38,11 +44,7 @@ export default function LoginPage() {
       const redirectTo = location.state?.from?.pathname;
       navigate(redirectTo || '/', { replace: true });
     } catch (err) {
-      setServerError(
-        err.status === 401
-          ? 'Email ou mot de passe incorrect.'
-          : err.message || 'Une erreur est survenue. Réessaie.'
-      );
+      setServerError(err.status === 401 ? 'invalidCredentials' : 'loginError');
     } finally {
       setIsSubmitting(false);
     }
@@ -55,15 +57,9 @@ export default function LoginPage() {
       <div className="relative w-full max-w-md">
         <div className="mb-4 flex justify-end"><LanguageSelector /></div>
         <div className="mb-8 text-center">
-          <p className="mb-2 font-mono text-xs uppercase tracking-[0.2em] text-accent">
-            Gestion du pèlerinage
-          </p>
-          <h1 className="font-display text-3xl font-semibold text-text-primary">
-            Bienvenue
-          </h1>
-          <p className="mt-2 font-body text-text-secondary">
-            Connecte-toi pour accéder à ton espace.
-          </p>
+          <p className="mb-2 font-mono text-xs uppercase tracking-[0.2em] text-accent">{t('loginKicker')}</p>
+          <h1 className="font-display text-3xl font-semibold text-text-primary">{t('welcome')}</h1>
+          <p className="mt-2 font-body text-text-secondary">{t('loginSubtitle')}</p>
         </div>
 
         <form onSubmit={handleSubmit} noValidate className="card space-y-5">
@@ -72,43 +68,43 @@ export default function LoginPage() {
               role="alert"
               className="rounded-md border border-danger bg-danger-tint px-4 py-3 text-sm text-danger"
             >
-              {serverError}
+              {t(serverError)}
             </div>
           )}
 
           <FormField
             id="email"
-            label="Email"
+            label={t('emailField')}
             type="email"
             value={form.email}
             onChange={handleChange}
-            error={errors.email}
-            placeholder="nom@exemple.com"
+            error={errors.email ? t(errors.email) : null}
+            placeholder={t('emailField')}
             autoComplete="email"
             required
           />
 
           <FormField
             id="password"
-            label="Mot de passe"
+            label={t('passwordField')}
             type="password"
             value={form.password}
             onChange={handleChange}
-            error={errors.password}
+            error={errors.password ? t(errors.password) : null}
             placeholder="••••••••"
             autoComplete="current-password"
             required
           />
 
           <button type="submit" disabled={isSubmitting} className="btn-primary w-full">
-            {isSubmitting ? 'Connexion…' : 'Se connecter'}
+            {isSubmitting ? t('signingIn') : t('signIn')}
           </button>
         </form>
 
         <p className="mt-6 text-center font-body text-sm text-text-secondary">
-          Nouveau pèlerin ?{' '}
+          {t('newPilgrim')}{' '}
           <Link to="/register" className="font-medium text-primary hover:text-primary-hover">
-            Créer un compte
+            {t('createAccount')}
           </Link>
         </p>
       </div>

@@ -1,10 +1,18 @@
+import { PAGE_TRANSLATIONS } from './translations.pages.js';
+import { OPERATIONS_TRANSLATIONS } from './translations.operations.js';
+import { ROLES_TRANSLATIONS } from './translations.roles.js';
+import { LIVE_TRANSLATIONS } from './translations.live.js';
+import { MOBILE_TRANSLATIONS } from './translations.mobile.js';
+import { COURSES_TRANSLATIONS } from './translations.courses.js';
+import { PILGRIM_TRANSLATIONS } from './translations.pilgrim.js';
+
 export const LANGUAGES = Object.freeze([
   { code: 'en', label: 'English', shortLabel: 'EN' },
   { code: 'fr', label: 'Français', shortLabel: 'FR' },
   { code: 'ar', label: 'العربية', shortLabel: 'AR' },
 ]);
 
-export const TRANSLATIONS = Object.freeze({
+const BASE_TRANSLATIONS = Object.freeze({
   en: Object.freeze({
     dashboard: 'Dashboard', overview: 'Overview', agencies: 'Agencies', dossiers: 'Applications', pilgrims: 'Pilgrims', notifications: 'Notifications', payments: 'Payments', documents: 'Documents', groups: 'Groups', guides: 'Guides', travel: 'Trips', presence: 'QR & Attendance', statistics: 'Statistics', organisation: 'Organisation', settings: 'Settings', logout: 'Log out', language: 'Language', welcome: 'Welcome', connected: 'Your account is connected to the backend.', myApplications: 'My applications', noApplications: 'No application yet.', loading: 'Loading…', allApplications: 'All applications', allAgencies: 'All agencies', registeredAgencies: 'Registered agencies', registeredPilgrims: 'Registered pilgrims', activeApplications: 'Active applications', noData: 'No data available yet.', search: 'Search', encadreurs: 'Guides', profile: 'Profile', operations: 'Operations',
     loginKicker: 'Pilgrimage management', loginSubtitle: 'Sign in to access your workspace.', emailField: 'Email', passwordField: 'Password', signIn: 'Sign in', signingIn: 'Signing in…', newPilgrim: 'New pilgrim?', createAccount: 'Create an account', emailRequired: 'Email is required.', invalidEmail: 'Enter a valid email address.', passwordRequired: 'Password is required.', invalidCredentials: 'Incorrect email or password.', loginError: 'Something went wrong. Please try again.', registerTitle: 'Create an account', registerSubtitle: 'Enter your information to start your pilgrim file.', firstName: 'First name', lastName: 'Last name', phone: 'Phone', confirmPassword: 'Confirm password', register: 'Create my account', registering: 'Creating…', existingAccount: 'Already have an account?', duplicateEmail: 'This email is already in use.', registrationError: 'Unable to create the account.',
@@ -54,7 +62,25 @@ export const TRANSLATIONS = Object.freeze({
   }),
 });
 
+/** Dictionnaire final : base + chaînes de pages (ces dernières l'emportent). */
+export const TRANSLATIONS = Object.freeze(
+  Object.fromEntries(Object.keys(BASE_TRANSLATIONS).map((code) => [code, Object.freeze({ ...BASE_TRANSLATIONS[code], ...PAGE_TRANSLATIONS[code], ...OPERATIONS_TRANSLATIONS[code], ...ROLES_TRANSLATIONS[code], ...LIVE_TRANSLATIONS[code], ...MOBILE_TRANSLATIONS[code], ...COURSES_TRANSLATIONS[code], ...PILGRIM_TRANSLATIONS[code] })]))
+);
+
+/** Locale Intl par langue (chiffres latins en arabe pour rester cohérent avec les montants). */
+export const LOCALES = Object.freeze({ en: 'en-GB', fr: 'fr-FR', ar: 'ar-u-nu-latn' });
+
+/**
+ * Traduit une clé avec interpolation `{{nom}}`. Si `values.count` est fourni,
+ * la variante `<clé>_one` (count = 1) ou `<clé>_other` est utilisée en priorité.
+ */
 export function translate(language, key, values = {}) {
-  const template = TRANSLATIONS[language]?.[key] ?? TRANSLATIONS.en[key] ?? key;
+  const dictionary = TRANSLATIONS[language] ?? TRANSLATIONS.en;
+  let template;
+  if (typeof values.count === 'number') {
+    const pluralKey = `${key}_${values.count === 1 ? 'one' : 'other'}`;
+    template = dictionary[pluralKey] ?? TRANSLATIONS.en[pluralKey];
+  }
+  template ??= dictionary[key] ?? TRANSLATIONS.en[key] ?? key;
   return Object.entries(values).reduce((text, [name, value]) => text.replaceAll(`{{${name}}}`, String(value)), template);
 }

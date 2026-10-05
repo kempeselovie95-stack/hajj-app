@@ -1,4 +1,5 @@
-import { View, Text, TextInput, StyleSheet } from 'react-native';
+import { useState } from 'react';
+import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native';
 import { THEME } from '@hajj/shared';
 import { FONTS } from '../hooks/useAppFonts.js';
 
@@ -17,23 +18,31 @@ export default function FormField({
   autoCapitalize = 'none',
   required = false,
 }) {
+  const [hidden, setHidden] = useState(true);
   return (
     <View style={styles.container}>
       <Text style={styles.label}>
         {label}
         {required && <Text style={styles.required}> *</Text>}
       </Text>
+      <View>
       <TextInput
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
         placeholderTextColor={THEME.colors.textSecondary}
-        secureTextEntry={secureTextEntry}
+        secureTextEntry={secureTextEntry && hidden}
         keyboardType={keyboardType}
         autoCapitalize={autoCapitalize}
-        style={[styles.input, error && styles.inputError]}
+        style={[styles.input, secureTextEntry && { paddingRight: 48 }, error && styles.inputError]}
         accessibilityLabel={label}
       />
+      {secureTextEntry ? (
+        <Pressable onPress={() => setHidden((current) => !current)} accessibilityRole="button" accessibilityLabel={hidden ? 'Show password' : 'Hide password'} style={styles.eye} hitSlop={8}>
+          <Text style={styles.eyeIcon}>{hidden ? '👁️' : '🙈'}</Text>
+        </Pressable>
+      ) : null}
+      </View>
       {error ? <Text style={styles.error}>{error}</Text> : null}
     </View>
   );
@@ -59,6 +68,8 @@ const styles = StyleSheet.create({
     fontSize: THEME.typography.sizes.base,
     color: THEME.colors.textPrimary,
   },
+  eye: { position: 'absolute', right: 6, top: 0, bottom: 0, width: 40, alignItems: 'center', justifyContent: 'center' },
+  eyeIcon: { fontSize: 20 },
   inputError: { borderColor: THEME.colors.danger },
   error: {
     marginTop: THEME.spacing.xs,

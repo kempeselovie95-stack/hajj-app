@@ -1,6 +1,6 @@
 const express = require('express');
 const { body, param } = require('express-validator');
-const { listerDossiers, obtenirDossier, creerDossier, mettreAJourStatut } = require('../controllers/Dossierscontroller');
+const { listerDossiers, obtenirDossier, creerDossier, mettreAJourStatut, obtenirValidation } = require('../controllers/Dossierscontroller');
 const { authentifier, autoriser } = require('../middleware/Auth');
 const { uploadDocument, listerDocuments } = require('../controllers/documentsController');
 
@@ -16,12 +16,15 @@ const dossierRules = [
 const statusRules = [
   body('statut').isIn(['brouillon','soumis','en_verification','valide','transmis_nusuk','confirme','rejete','annule']).withMessage('Statut invalide'),
   body('commentaire').optional().isString().trim().isLength({ max: 2000 }),
+  body('nusuk_reference').optional().isString().trim().isLength({ max: 100 }),
+  body('nusuk_visa').optional().isString().trim().isLength({ max: 100 }),
 ];
 
 router.get('/', listerDossiers);
 router.get('/:id', param('id').isInt(), obtenirDossier);
+router.get('/:id/validation', param('id').isInt(), obtenirValidation);
 router.get('/:id/documents', param('id').isInt(), listerDocuments);
 router.post('/', autoriser('pelerin'), dossierRules, creerDossier);
-router.patch('/:id/statut', autoriser('admin', 'agence'), param('id').isInt(), statusRules, mettreAJourStatut);
+router.patch('/:id/statut', autoriser('admin', 'agence', 'pelerin'), param('id').isInt(), statusRules, mettreAJourStatut);
 router.post('/:id/documents', autoriser('pelerin'), param('id').isInt(), uploadDocument);
 module.exports = router;

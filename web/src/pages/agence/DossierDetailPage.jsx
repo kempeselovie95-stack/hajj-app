@@ -1,30 +1,35 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams, Navigate } from 'react-router-dom';
 import {
-  DOSSIER_STATUS_LABELS,
   DOSSIER_STATUS_COLOR,
   DOCUMENT_STATUS,
   buildDocumentChecklist,
   computeDocumentProgress,
-  formatDate,
   canTransitionTo,
 } from '@hajj/shared';
 import StatusBadge from '../../components/common/StatusBadge.jsx';
 import ProgressBar from '../../components/common/ProgressBar.jsx';
 import Modal from '../../components/common/Modal.jsx';
 import DocumentChecklistItem from '../../components/dossiers/DocumentChecklistItem.jsx';
-import DossierStatusSelect from '../../components/dossiers/DossierStatusSelect.jsx';
+import ValidationPanel from '../../components/dossiers/ValidationPanel.jsx';
 import StatusHistoryTimeline from '../../components/dossiers/StatusHistoryTimeline.jsx';
 import { useAuth } from '../../contexts/AuthContext.jsx';
+import { useDataSync } from '../../contexts/DataSyncContext.jsx';
+import { useLanguage } from '../../contexts/LanguageContext.jsx';
 
 export default function DossierDetailPage() {
   const { id } = useParams();
   const { user, api } = useAuth();
+  const base = user?.role === 'admin' ? '/admin' : '/agence';
+  const { version } = useDataSync();
+  const [actionError, setActionError] = useState('');
+  const { t, formatDate } = useLanguage();
   const [dossier, setDossier] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [rejectionTarget, setRejectionTarget] = useState(null); // { type, label } | null
   const [rejectionReason, setRejectionReason] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let mounted = true;
@@ -33,20 +38,20 @@ export default function DossierDetailPage() {
         if (mounted) setDossier(normalizeDossier(data.dossier));
       })
       .catch((requestError) => {
-        if (mounted) setError(requestError.message || 'Dossier introuvable.');
+        if (mounted) setError(requestError.message || t('dd_notFound'));
       })
       .finally(() => {
         if (mounted) setIsLoading(false);
       });
     return () => { mounted = false; };
-  }, [api, id]);
+  }, [api, id, reloadKey, version]); // « version » : la fiche se relit toute seule (nom, téléphone, agence, pièces…)
 
   if (isLoading) {
-    return <p className="font-body text-sm text-text-secondary">Chargement du dossier…</p>;
+    return <p className="font-body text-sm text-text-secondary">{t('dd_loading')}</p>;
   }
 
   if (error || !dossier) {
-    return <Navigate to="/agence/dossiers" replace />;
+    return <Navigate to={`${base}/dossiers`} replace />;
   }
 
   const checklist = buildDocumentChecklist(dossier.documents);
@@ -66,7 +71,9 @@ export default function DossierDetailPage() {
   }
 
   async function handleValidate(type) {
-    await updateDocumentStatus(type, DOCUMENT_STATUS.VALIDE);
+    setActionError('');
+    try { await updateDocumentStatus(type, DOCUMENT_STATUS.VALIDE); }
+    catch (requestError) { setActionError(requestError.message || t('fp_error')); }
   }
 
   function openRejectModal(type, label) {
@@ -75,7 +82,9 @@ export default function DossierDetailPage() {
   }
 
   async function confirmReject() {
-    await updateDocumentStatus(rejectionTarget.type, DOCUMENT_STATUS.REJETE, rejectionReason);
+    setActionError('');
+    try { await updateDocumentStatus(rejectionTarget.type, DOCUMENT_STATUS.REJETE, rejectionReason); }
+    catch (requestError) { setActionError(requestError.message || t('fp_error')); }
     setRejectionTarget(null);
   }
 
@@ -86,7 +95,7 @@ export default function DossierDetailPage() {
       id: Date.now(),
       ancien_statut: dossier.statut,
       nouveau_statut: nextStatus,
-      modifie_par_nom: `${user?.prenom ?? 'Toi'} (agence)`,
+      modifie_par_nom: t('dd_actorAgency', { name: user?.prenom ?? t('dd_you') }),
       created_at: new Date().toISOString(),
     };
     setDossier((prev) => ({
@@ -98,8 +107,8 @@ export default function DossierDetailPage() {
 
   return (
     <div className="space-y-6">
-      <Link to="/agence/dossiers" className="font-body text-sm text-text-secondary hover:text-primary">
-        ← Retour aux dossiers
+      <Link to={`${base}/dossiers`} className="font-body text-sm text-text-secondary hover:text-primary">
+        ← {t('returnToDossiers')}
       </Link>
 
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -109,68 +118,72 @@ export default function DossierDetailPage() {
             {dossier.pelerin.prenom} {dossier.pelerin.nom}
           </h1>
           <p className="mt-1 font-body text-sm text-text-secondary">
-            Dossier créé le {formatDate(dossier.created_at, 'long')}
+            {t('dd_createdOn', { date: formatDate(dossier.created_at, { dateStyle: 'long' }) })}
           </p>
         </div>
         <div className="flex flex-col items-end gap-2">
           <StatusBadge
-            label={DOSSIER_STATUS_LABELS[dossier.statut]}
+            label={t(`status_${dossier.statut}`)}
             semantic={DOSSIER_STATUS_COLOR[dossier.statut]}
           />
-          <DossierStatusSelect currentStatus={dossier.statut} onChange={handleStatusChange} />
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="card lg:col-span-2">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="font-display text-lg font-semibold text-text-primary">Documents</h2>
+            <h2 className="font-display text-lg font-semibold text-text-primary">{t('dd_documents')}</h2>
             <span className="font-mono text-sm text-text-secondary">
-              {progress.validated}/{progress.total} validés
+              {t('dd_approvedCount', { validated: progress.validated, total: progress.total })}
             </span>
           </div>
           <ProgressBar percent={progress.percent} />
+          {actionError && <p role="alert" className="mt-3 rounded-md border border-danger bg-danger-tint px-3 py-2 text-sm text-danger">{actionError}</p>}
           <div className="mt-4 divide-y divide-border">
-            {checklist.map(({ type, label, document }) => (
+            {checklist.map(({ type, document }) => (
               <DocumentChecklistItem
                 key={type}
-                label={label}
+                label={t(`doctype_${type}`)}
                 document={document}
                 onValidate={() => handleValidate(type)}
-                onReject={() => openRejectModal(type, label)}
+                onReject={() => openRejectModal(type, t(`doctype_${type}`))}
               />
             ))}
           </div>
         </div>
 
         <div className="card h-fit space-y-3">
-          <h2 className="font-display text-lg font-semibold text-text-primary">Pèlerin</h2>
-          <InfoLine label="Nom complet" value={`${dossier.pelerin.prenom} ${dossier.pelerin.nom}`} />
-          <InfoLine label="Téléphone" value={dossier.pelerin.telephone} />
-          <InfoLine label="Agence" value={dossier.agence.nom} />
+          <h2 className="font-display text-lg font-semibold text-text-primary">{t('pilgrim')}</h2>
+          <InfoLine label={t('fullName')} value={`${dossier.pelerin.prenom} ${dossier.pelerin.nom}`} />
+          <InfoLine label={t('phone')} value={dossier.pelerin.telephone} />
+          <InfoLine label={t('agency')} value={dossier.agence.nom ?? t('dd_unassigned')} />
+          <InfoLine label={t('emailField')} value={dossier.pelerin_email ?? '—'} />
+          <InfoLine label={t('md_package')} value={dossier.forfait_nom ?? dossier.forfait ?? '—'} />
         </div>
       </div>
 
+      <ValidationPanel dossierId={dossier.id} onChanged={() => setReloadKey((key) => key + 1)} />
+
       <div className="card">
         <h2 className="mb-4 font-display text-lg font-semibold text-text-primary">
-          Historique du dossier
+          {t('dossierHistory')}
         </h2>
         <StatusHistoryTimeline entries={dossier.historique ?? []} />
       </div>
 
       <Modal
-        title={`Rejeter — ${rejectionTarget?.label ?? ''}`}
+        title={t('dd_rejectTitle', { label: rejectionTarget?.label ?? '' })}
         isOpen={!!rejectionTarget}
         onClose={() => setRejectionTarget(null)}
       >
         <label className="mb-1.5 block font-body text-sm font-medium text-text-primary">
-          Motif du rejet
+          {t('rejectReason')}
         </label>
         <textarea
           value={rejectionReason}
           onChange={(e) => setRejectionReason(e.target.value)}
           rows={3}
-          placeholder="Ex : document illisible, information manquante…"
+          placeholder={t('dd_rejectPlaceholder')}
           className="input-field resize-none"
         />
         <div className="mt-4 flex justify-end gap-3">
@@ -178,14 +191,14 @@ export default function DossierDetailPage() {
             onClick={() => setRejectionTarget(null)}
             className="rounded-md px-4 py-2 font-body text-sm font-medium text-text-secondary hover:text-text-primary"
           >
-            Annuler
+            {t('cancel')}
           </button>
           <button
             onClick={confirmReject}
             disabled={!rejectionReason.trim()}
             className="rounded-md bg-danger px-4 py-2 font-body text-sm font-semibold text-[#FAF7F0] disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Confirmer le rejet
+            {t('rejectConfirm')}
           </button>
         </div>
       </Modal>
@@ -200,9 +213,9 @@ function normalizeDossier(dossier) {
     pelerin: dossier.pelerin ?? {
       nom: dossier.nom ?? dossier.pelerin_nom?.split(' ').slice(1).join(' ') ?? '',
       prenom: dossier.prenom ?? dossier.pelerin_nom?.split(' ')[0] ?? '',
-      telephone: dossier.telephone,
+      telephone: dossier.telephone || '—',
     },
-    agence: dossier.agence ?? { nom: dossier.nom_agence ?? 'Non attribuée' },
+    agence: dossier.agence ?? { nom: dossier.nom_agence ?? null },
   };
 }
 

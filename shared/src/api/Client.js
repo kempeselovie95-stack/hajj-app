@@ -4,7 +4,7 @@ function normalizeBaseURL(value) {
   return String(value || '').trim().replace(/\/+$/, '');
 }
 
-export function createApiClient({ baseURL, getToken, onUnauthorized }) {
+export function createApiClient({ baseURL, getToken, onUnauthorized, onMutation }) {
   const normalizedBaseURL = normalizeBaseURL(baseURL);
 
   if (!normalizedBaseURL) {
@@ -29,8 +29,21 @@ export function createApiClient({ baseURL, getToken, onUnauthorized }) {
   });
 
   client.interceptors.response.use(
-    (response) => response,
+    (response) => {
+      // Toute écriture réussie (POST/PUT/PATCH/DELETE) prévient l'application : les tableaux de bord se rafraîchissent.
+      const method = String(response.config?.method || 'get').toLowerCase();
+      if (method !== 'get') onMutation?.({ method, url: response.config?.url });
+      return response;
+    },
     async (error) => {
+      // Une lecture (GET) qui échoue sur une coupure réseau ou une erreur 5xx est retentée une fois.
+      const config = error?.config;
+      const status0 = error?.response?.status;
+      if (config && String(config.method).toLowerCase() === 'get' && !config.__retried && (!error.response || status0 >= 502)) {
+        config.__retried = true;
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        return client.request(config);
+      }
       const status = error?.response?.status;
       const backendMessage = error?.response?.data?.message;
       const validationMessage = error?.response?.data?.erreurs;
@@ -59,7 +72,8 @@ export function createApiClient({ baseURL, getToken, onUnauthorized }) {
         error?.message ||
         'Une erreur réseau est survenue.';
 
-      return Promise.reject({ status, message, original: error });
+      // `response` est conservé : les écrans lisent `error.response.data.code / .message / .erreurs`.
+      return Promise.reject({ status, message, code: error.response.data?.code, data: error.response.data, response: error.response, original: error });
     }
   );
 

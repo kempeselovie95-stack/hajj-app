@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext.jsx';
+import { useLanguage } from '../../contexts/LanguageContext.jsx';
 
 export default function PilgrimsPage() {
   const { api, user } = useAuth();
+  const { t, locale, formatNumber } = useLanguage();
   const isAdmin = user?.role === 'admin';
   const [dossiers, setDossiers] = useState([]);
   const [seasons, setSeasons] = useState([]);
@@ -24,20 +26,18 @@ export default function PilgrimsPage() {
     let active = true;
     setLoading(true);
     const requests = [api.dossiers.list({ page: 1, limite: 100 })];
-    if (isAdmin) requests.push(api.catalog.listSeasons(), api.catalog.listPackages(), api.admin.listAgencies());
+    requests.push(api.catalog.listSeasons(), api.catalog.listPackages());
+    if (isAdmin) requests.push(api.admin.listAgencies());
     Promise.all(requests)
       .then(([dossierData, seasonData, packageData, agencyData]) => {
         if (!active) return;
         setDossiers(dossierData.dossiers ?? []);
-        if (isAdmin) {
-          const availableSeasons = (seasonData?.saisons ?? []).filter((season) => season.est_active);
-          setSeasons(availableSeasons);
-          setPackages(packageData?.forfaits ?? []);
-          setAgencies(agencyData?.agences ?? []);
-        }
+        setSeasons((seasonData?.saisons ?? []).filter((season) => season.est_active));
+        setPackages(packageData?.forfaits ?? []);
+        if (isAdmin) setAgencies(agencyData?.agences ?? []);
         setError('');
       })
-      .catch(() => { if (active) { setDossiers([]); setError('Impossible de charger les pèlerins. Vérifie la connexion au serveur.'); } })
+      .catch(() => { if (active) { setDossiers([]); setError(t('pg_loadError')); } })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [api, isAdmin, refreshCount]);
@@ -48,19 +48,19 @@ export default function PilgrimsPage() {
     return dossiers.map((dossier, index) => {
       const pelerin = dossier.pelerin ?? {};
       const [apiPrenom, ...apiNom] = (dossier.pelerin_nom ?? '').trim().split(/\s+/).filter(Boolean);
-      const prenom = pelerin.prenom ?? dossier.prenom ?? apiPrenom ?? 'Pèlerin';
-      const nom = pelerin.nom ?? dossier.nom ?? apiNom.join(' ') ?? 'Anonyme';
+      const prenom = pelerin.prenom ?? dossier.prenom ?? apiPrenom ?? t('pg_pilgrimDefault');
+      const nom = pelerin.nom ?? dossier.nom ?? apiNom.join(' ') ?? t('pg_anonymous');
       const record = {
         id: dossier.numero_dossier ?? dossier.id ?? `P-${index + 1}`,
         prenom,
         nom,
         telephone: pelerin.telephone ?? dossier.telephone ?? '+237 000 000 000',
-        forfait: dossier.forfait ?? 'Non défini',
-        groupe: dossier.groupe ?? 'Non affecté',
+        forfait: dossier.forfait ?? t('pg_noPackage'),
+        groupe: dossier.groupe ?? t('pg_noGroup'),
         dossier: dossier.statut ?? 'brouillon',
         completion: dossier.total_documents ? Math.round((Number(dossier.documents_approuves || 0) / Number(dossier.total_documents)) * 100) : 0,
         solde: Number(dossier.solde_restant || 0),
-        visa: visaLabel(dossier.visa_status),
+        visa: dossier.visa_status ?? 'PENDING',
         avatar: `${(pelerin.prenom ?? dossier.prenom ?? 'P').charAt(0)}${(pelerin.nom ?? dossier.nom ?? 'A').charAt(0)}`.toUpperCase(),
         avatarTone: ['bg-[#8fbce6] text-white', 'bg-[#d1c0ef] text-white', 'bg-[#f1c08f] text-white', 'bg-[#8ac9bf] text-white', 'bg-[#f3d4e6] text-white'][index % 5],
         statusKey: dossier.statut,
@@ -70,12 +70,12 @@ export default function PilgrimsPage() {
 
       return record;
     });
-  }, [dossiers]);
+  }, [dossiers, t]);
 
   const groupOptions = [...new Set(pilgrims.map((person) => person.groupKey).filter((value) => value !== 'NONE'))];
   const visiblePilgrims = pilgrims.filter((person) => {
-    const term = search.trim().toLocaleLowerCase('fr');
-    const matchesText = !term || [person.id, person.prenom, person.nom, person.telephone].some((value) => String(value || '').toLocaleLowerCase('fr').includes(term));
+    const term = search.trim().toLocaleLowerCase(locale);
+    const matchesText = !term || [person.id, person.prenom, person.nom, person.telephone].some((value) => String(value || '').toLocaleLowerCase(locale).includes(term));
     return matchesText
       && (statusFilter === 'ALL' || person.statusKey === statusFilter)
       && (groupFilter === 'ALL' || person.groupKey === groupFilter)
@@ -91,13 +91,13 @@ export default function PilgrimsPage() {
       const payload = { ...form, saison_id: Number(form.saison_id), forfait_id: Number(form.forfait_id) };
       if (form.agence_id) payload.agence_id = Number(form.agence_id);
       else delete payload.agence_id;
-      const result = await api.admin.createPilgrim(payload);
+      const result = await (isAdmin ? api.admin.createPilgrim(payload) : api.agency.createPilgrim(payload));
       setShowCreate(false);
       setForm({ prenom: '', nom: '', email: '', telephone: '', mot_de_passe: '', saison_id: '', forfait_id: '', agence_id: '' });
-      setNotice(`Pèlerin et dossier ${result.numero_dossier} créés.`);
+      setNotice(t('pg_created', { number: result.numero_dossier }));
       setRefreshCount((count) => count + 1);
     } catch (requestError) {
-      setError(requestError.response?.data?.message || requestError.response?.data?.erreurs?.[0]?.msg || 'Impossible de créer le pèlerin et son dossier.');
+      setError(requestError.response?.data?.message || requestError.response?.data?.erreurs?.[0]?.msg || t('pg_createFailed'));
     } finally { setSaving(false); }
   }
 
@@ -106,14 +106,14 @@ export default function PilgrimsPage() {
       <div className="border-b border-[#e5e7eb] bg-[#f6f7fb] px-5 py-5">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
           <div>
-            <h1 className="text-[44px] font-semibold leading-none tracking-[-0.04em] text-slate-700">Gestion des pèlerins</h1>
-            <p className="mt-3 text-[15px] text-slate-500">{pilgrims.length} pèlerins inscrits · données actualisées</p>
+            <h1 className="text-[44px] font-semibold leading-none tracking-[-0.04em] text-slate-700">{t('pg_title')}</h1>
+            <p className="mt-3 text-[15px] text-slate-500">{t('pg_registered', { count: formatNumber(pilgrims.length) })}</p>
           </div>
 
           <div className="flex items-center gap-3">
-            <ActionButton label="Importer" icon="⇩" />
-            <ActionButton label="Exporter" icon="⇪" />
-            {isAdmin && <PrimaryButton label="Nouveau pèlerin" icon="＋" onClick={() => { setError(''); setNotice(''); setForm((current) => ({ ...current, saison_id: String(seasons[0]?.id || ''), forfait_id: '', agence_id: String(agencies[0]?.id || '') })); setShowCreate(true); }} />}
+            <ActionButton label={t('pg_import')} icon="⇩" />
+            <ActionButton label={t('pg_export')} icon="⇪" />
+            {<PrimaryButton label={t('pg_new')} icon="＋" onClick={() => { setError(''); setNotice(''); setForm((current) => ({ ...current, saison_id: String(seasons[0]?.id || ''), forfait_id: '', agence_id: String(agencies[0]?.id || '') })); setShowCreate(true); }} />}
           </div>
         </div>
       </div>
@@ -121,20 +121,20 @@ export default function PilgrimsPage() {
       <div className="p-5">
         <div className="flex flex-col gap-3 rounded-[16px] border border-[#dfe5eb] bg-[#f7f8fa] p-3 lg:flex-row lg:items-center">
           <div className="relative flex-1">
-            <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-base text-slate-400">⌕</span>
+            <span className="pointer-events-none absolute start-4 top-1/2 -translate-y-1/2 text-base text-slate-400">⌕</span>
             <input
-              className="w-full rounded-xl border border-[#dfe3ea] bg-[#f2f3f7] py-3 pl-11 pr-4 text-[15px] text-slate-600 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+              className="w-full rounded-xl border border-[#dfe3ea] bg-[#f2f3f7] py-3 ps-11 pe-4 text-[15px] text-slate-600 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-200"
               type="text"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Rechercher par nom, ID, téléphone, email..."
+              placeholder={t('pg_searchPlaceholder')}
             />
           </div>
 
           <div className="flex flex-wrap gap-3">
-            <Select value={statusFilter} onChange={setStatusFilter} options={[['ALL', 'Tous les statuts'], ['brouillon', 'Brouillon'], ['soumis', 'Soumis'], ['en_verification', 'En vérification'], ['valide', 'Validé'], ['rejete', 'Rejeté']]} />
-            <Select value={groupFilter} onChange={setGroupFilter} options={[["ALL", 'Tous les groupes'], ...groupOptions.map((group) => [group, group])]} />
-            <Select value={packageFilter} onChange={setPackageFilter} options={[["ALL", 'Tous les forfaits'], ...packages.map((item) => [String(item.id), item.nom])]} />
+            <Select value={statusFilter} onChange={setStatusFilter} options={[['ALL', t('allStatus')], ...['brouillon', 'soumis', 'en_verification', 'valide', 'rejete'].map((status) => [status, t(`status_${status}`)])]} />
+            <Select value={groupFilter} onChange={setGroupFilter} options={[["ALL", t('pg_allGroups')], ...groupOptions.map((group) => [group, group])]} />
+            <Select value={packageFilter} onChange={setPackageFilter} options={[["ALL", t('pg_allPackages')], ...packages.map((item) => [String(item.id), item.nom])]} />
           </div>
         </div>
 
@@ -143,25 +143,25 @@ export default function PilgrimsPage() {
 
         <div className="mt-5 overflow-hidden rounded-[18px] border border-[#dfe3ea] bg-white">
           <div className="flex items-center justify-between border-b border-[#e7eaee] bg-[#fbfcfd] px-4 py-3 text-[14px] text-slate-500">
-            <span>{loading ? 'Chargement...' : `${visiblePilgrims.length} pèlerins trouvés`}</span>
+            <span>{loading ? t('pg_loading') : t('pg_found', { count: formatNumber(visiblePilgrims.length) })}</span>
           </div>
 
           <div className="overflow-x-auto">
-            <table className="min-w-[1100px] w-full border-separate border-spacing-0 text-left">
+            <table className="min-w-[1100px] w-full border-separate border-spacing-0 text-start">
               <thead>
                 <tr className="bg-[#f8fafb] text-[12px] font-semibold uppercase tracking-[0.12em] text-slate-500">
                   <th className="w-12 px-3 py-4">
                     <input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" />
                   </th>
-                  <th className="px-3 py-4">ID</th>
-                  <th className="px-3 py-4">Pèlerin</th>
-                  <th className="px-3 py-4">Téléphone</th>
-                  <th className="px-3 py-4">Forfait</th>
-                  <th className="px-3 py-4">Groupe</th>
-                  <th className="px-3 py-4">Statut dossier</th>
-                  <th className="px-3 py-4">Complétion</th>
-                  <th className="px-3 py-4">Solde</th>
-                  <th className="px-3 py-4">Visa</th>
+                  <th className="px-3 py-4">{t('pg_colId')}</th>
+                  <th className="px-3 py-4">{t('pg_colPilgrim')}</th>
+                  <th className="px-3 py-4">{t('pg_colPhone')}</th>
+                  <th className="px-3 py-4">{t('pg_colPackage')}</th>
+                  <th className="px-3 py-4">{t('pg_colGroup')}</th>
+                  <th className="px-3 py-4">{t('pg_colStatus')}</th>
+                  <th className="px-3 py-4">{t('pg_colProgress')}</th>
+                  <th className="px-3 py-4">{t('pg_colBalance')}</th>
+                  <th className="px-3 py-4">{t('pg_colVisa')}</th>
                 </tr>
               </thead>
 
@@ -203,13 +203,13 @@ export default function PilgrimsPage() {
                         <span className="text-[14px] font-medium text-slate-600">{person.completion}%</span>
                       </div>
                     </td>
-                    <td className="px-3 py-4 text-[14px] font-medium text-slate-600">{Number(person.solde).toLocaleString('fr-FR')} FCFA</td>
+                    <td className="px-3 py-4 text-[14px] font-medium text-slate-600">{formatNumber(person.solde)} {t('ad_currency')}</td>
                     <td className="px-3 py-4">
                       <VisaBadge status={person.visa} />
                     </td>
                   </tr>
                 ))}
-                {!loading && visiblePilgrims.length === 0 && <tr><td colSpan="10" className="px-4 py-10 text-center text-sm text-slate-500">Aucun pèlerin ne correspond à ces filtres.</td></tr>}
+                {!loading && visiblePilgrims.length === 0 && <tr><td colSpan="10" className="px-4 py-10 text-center text-sm text-slate-500">{t('pg_noMatch')}</td></tr>}
               </tbody>
             </table>
           </div>
@@ -217,21 +217,21 @@ export default function PilgrimsPage() {
       </div>
       {showCreate && <div className="fixed inset-0 z-[60] flex items-end justify-center bg-slate-950/40 sm:items-center sm:p-4" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowCreate(false); }}>
         <form onSubmit={createPilgrim} className="max-h-[92dvh] w-full space-y-4 overflow-y-auto rounded-t-2xl bg-white p-5 shadow-2xl sm:max-w-2xl sm:rounded-2xl sm:p-6">
-          <header><h2 className="text-xl font-semibold text-slate-900">Créer un pèlerin et son dossier</h2><p className="mt-1 text-sm text-slate-500">Le compte, le dossier et son historique seront créés ensemble.</p></header>
+          <header><h2 className="text-xl font-semibold text-slate-900">{t('pg_createTitle')}</h2><p className="mt-1 text-sm text-slate-500">{t('pg_createSub')}</p></header>
           {error && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
           <div className="grid gap-3 sm:grid-cols-2">
-            <FormField label="Prénom"><input required maxLength="100" autoComplete="given-name" value={form.prenom} onChange={(event) => setForm((current) => ({ ...current, prenom: event.target.value }))} className="field" /></FormField>
-            <FormField label="Nom"><input required maxLength="100" autoComplete="family-name" value={form.nom} onChange={(event) => setForm((current) => ({ ...current, nom: event.target.value }))} className="field" /></FormField>
-            <FormField label="Email"><input required type="email" autoComplete="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} className="field" /></FormField>
-            <FormField label="Téléphone"><input type="tel" maxLength="20" autoComplete="tel" value={form.telephone} onChange={(event) => setForm((current) => ({ ...current, telephone: event.target.value }))} className="field" /></FormField>
-            <FormField label="Mot de passe temporaire"><input required type="password" minLength="8" autoComplete="new-password" value={form.mot_de_passe} onChange={(event) => setForm((current) => ({ ...current, mot_de_passe: event.target.value }))} className="field" /></FormField>
-            <FormField label="Saison Hajj"><select required value={form.saison_id} onChange={(event) => { const nextSeason = event.target.value; const nextPackage = packages.find((item) => String(item.saison_id) === nextSeason); setForm((current) => ({ ...current, saison_id: nextSeason, forfait_id: nextPackage ? String(nextPackage.id) : '' })); }} className="field"><option value="">Choisir une saison active</option>{seasons.map((season) => <option key={season.id} value={season.id}>{season.libelle || `Hajj ${season.annee}`}</option>)}</select></FormField>
-            <FormField label="Forfait"><select required value={form.forfait_id} onChange={(event) => setForm((current) => ({ ...current, forfait_id: event.target.value }))} className="field"><option value="">Choisir un forfait</option>{seasonPackages.map((item) => <option key={item.id} value={item.id}>{item.nom} · {Number(item.prix).toLocaleString('fr-FR')} {item.devise}</option>)}</select></FormField>
-            <FormField label="Organisation (facultatif)"><select value={form.agence_id} onChange={(event) => setForm((current) => ({ ...current, agence_id: event.target.value }))} className="field"><option value="">Aucune organisation</option>{agencies.map((agency) => <option key={agency.id} value={agency.id}>{agency.name}</option>)}</select></FormField>
+            <FormField label={t('pg_fFirst')}><input required maxLength="100" autoComplete="given-name" value={form.prenom} onChange={(event) => setForm((current) => ({ ...current, prenom: event.target.value }))} className="field" /></FormField>
+            <FormField label={t('pg_fLast')}><input required maxLength="100" autoComplete="family-name" value={form.nom} onChange={(event) => setForm((current) => ({ ...current, nom: event.target.value }))} className="field" /></FormField>
+            <FormField label={t('pg_fEmail')}><input required type="email" autoComplete="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} className="field" /></FormField>
+            <FormField label={t('pg_fPhone')}><input type="tel" maxLength="20" autoComplete="tel" value={form.telephone} onChange={(event) => setForm((current) => ({ ...current, telephone: event.target.value }))} className="field" /></FormField>
+            <FormField label={t('pg_fTempPassword')}><input required type="password" minLength="8" autoComplete="new-password" value={form.mot_de_passe} onChange={(event) => setForm((current) => ({ ...current, mot_de_passe: event.target.value }))} className="field" /></FormField>
+            <FormField label={t('pg_fSeason')}><select required value={form.saison_id} onChange={(event) => { const nextSeason = event.target.value; const nextPackage = packages.find((item) => String(item.saison_id) === nextSeason); setForm((current) => ({ ...current, saison_id: nextSeason, forfait_id: nextPackage ? String(nextPackage.id) : '' })); }} className="field"><option value="">{t('pg_fSeasonChoose')}</option>{seasons.map((season) => <option key={season.id} value={season.id}>{season.libelle || `Hajj ${season.annee}`}</option>)}</select></FormField>
+            <FormField label={t('pg_fPackage')}><select required value={form.forfait_id} onChange={(event) => setForm((current) => ({ ...current, forfait_id: event.target.value }))} className="field"><option value="">{t('pg_fPackageChoose')}</option>{seasonPackages.map((item) => <option key={item.id} value={item.id}>{item.nom} · {formatNumber(item.prix)} {item.devise}</option>)}</select></FormField>
+            {isAdmin && <FormField label={t('pg_fOrg')}><select value={form.agence_id} onChange={(event) => setForm((current) => ({ ...current, agence_id: event.target.value }))} className="field"><option value="">{t('pg_fOrgNone')}</option>{agencies.map((agency) => <option key={agency.id} value={agency.id}>{agency.name}</option>)}</select></FormField>}
           </div>
-          {!seasons.length && <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">Crée d’abord une saison active et un forfait sur la page Opérations.</p>}
-          {seasons.length > 0 && !seasonPackages.length && <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">Aucun forfait actif n’existe pour la saison sélectionnée.</p>}
-          <div className="flex justify-end gap-2"><button type="button" onClick={() => setShowCreate(false)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600">Annuler</button><button type="submit" disabled={saving || !seasonPackages.length} className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{saving ? 'Création…' : 'Créer le pèlerin et le dossier'}</button></div>
+          {!seasons.length && <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">{t('pg_needSeason')}</p>}
+          {seasons.length > 0 && !seasonPackages.length && <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">{t('pg_noPackageSeason')}</p>}
+          <div className="flex justify-end gap-2"><button type="button" onClick={() => setShowCreate(false)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600">{t('cancel')}</button><button type="submit" disabled={saving || !seasonPackages.length} className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{saving ? t('c_creating') : t('pg_submit')}</button></div>
         </form>
       </div>}
       <style>{`.field{display:block;width:100%;margin-top:.375rem;border:1px solid #dbe2e8;border-radius:.625rem;background:#fff;padding:.625rem .75rem;font-size:.875rem;color:#334155;outline:none}.field:focus{border-color:#14845d;box-shadow:0 0 0 2px rgba(20,132,93,.15)}`}</style>
@@ -268,16 +268,15 @@ function FormField({ label, children }) {
 }
 
 function StatusBadge({ status }) {
-  const labels = { brouillon: 'Brouillon', soumis: 'Soumis', en_verification: 'En vérification', valide: 'Validé', transmis_nusuk: 'Transmis à Nusuk', confirme: 'Confirmé', rejete: 'Rejeté', annule: 'Annulé' };
+  const { t } = useLanguage();
   const tone = ['valide', 'transmis_nusuk', 'confirme'].includes(status) ? 'bg-[#d9f5ea] text-[#1d8a66]' : ['soumis', 'en_verification'].includes(status) ? 'bg-[#dfebff] text-[#3f67d6]' : 'bg-[#ffe3d9] text-[#d86046]';
-  return <span className={`inline-flex rounded-full px-2.5 py-1 text-[12px] font-medium ${tone}`}>{labels[status] || status}</span>;
+  return <span className={`inline-flex rounded-full px-2.5 py-1 text-[12px] font-medium ${tone}`}>{t(`status_${status}`)}</span>;
 }
 
-function visaLabel(status) {
-  return status === 'APPROVED' ? 'Validé' : status === 'UNDER_REVIEW' ? 'En cours' : status === 'REJECTED' ? 'Rejeté' : 'En attente';
-}
+const VISA_LABEL_KEYS = { APPROVED: 'pg_visaApproved', UNDER_REVIEW: 'pg_visaInProgress', REJECTED: 'pg_visaRejected' };
 
 function VisaBadge({ status }) {
-  const tone = status === 'Validé' ? 'bg-[#ebf7ef] text-[#2e9f6a]' : status === 'En cours' ? 'bg-[#e7f0ff] text-[#466ddb]' : 'bg-[#fff1d8] text-[#d29a1a]';
-  return <span className={`inline-flex rounded-full px-2.5 py-1 text-[12px] font-medium ${tone}`}>{status}</span>;
+  const { t } = useLanguage();
+  const tone = status === 'APPROVED' ? 'bg-[#ebf7ef] text-[#2e9f6a]' : status === 'UNDER_REVIEW' ? 'bg-[#e7f0ff] text-[#466ddb]' : 'bg-[#fff1d8] text-[#d29a1a]';
+  return <span className={`inline-flex rounded-full px-2.5 py-1 text-[12px] font-medium ${tone}`}>{t(VISA_LABEL_KEYS[status] ?? 'pg_visaPending')}</span>;
 }

@@ -1,10 +1,12 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { useAuth } from './AuthContext.jsx';
+import { useDataSync } from '../sync/DataSyncContext.jsx';
 
 const NotificationsContext = createContext(null);
 
 export function NotificationsProvider({ children }) {
   const { api, isAuthenticated } = useAuth();
+  const { version } = useDataSync();
   const [notifications, setNotifications] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -16,7 +18,6 @@ export function NotificationsProvider({ children }) {
       return () => { mounted = false; };
     }
 
-    setIsLoading(true);
     api.notifications.list()
       .then((data) => {
         if (mounted) setNotifications((data.notifications ?? []).map(normalizeNotification));
@@ -29,7 +30,7 @@ export function NotificationsProvider({ children }) {
       });
 
     return () => { mounted = false; };
-  }, [api, isAuthenticated]);
+  }, [api, isAuthenticated, version]);
 
   const unreadCount = useMemo(() => notifications.filter((n) => !n.lue).length, [notifications]);
 
@@ -38,13 +39,20 @@ export function NotificationsProvider({ children }) {
     await api.notifications.markAsRead(id);
   }
 
+  async function removeNotification(id) {
+    const previous = notifications;
+    setNotifications((prev) => prev.filter((n) => n.id !== id)); // retrait immédiat ; restauré si le serveur refuse
+    try { await api.notifications.remove(id); }
+    catch (error) { setNotifications(previous); throw error; }
+  }
+
   async function markAllAsRead() {
     setNotifications((prev) => prev.map((n) => ({ ...n, lue: true })));
     await api.notifications.markAllAsRead();
   }
 
   const value = useMemo(
-    () => ({ notifications, unreadCount, markAsRead, markAllAsRead, isLoading }),
+    () => ({ notifications, unreadCount, markAsRead, markAllAsRead, removeNotification, isLoading }),
     [notifications, unreadCount, isLoading]
   );
 

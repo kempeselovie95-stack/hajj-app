@@ -118,6 +118,9 @@ async function updateDocument(req,res,next,status) {
     const valid = status === 'APPROVED';
     const notificationType = valid ? 'document_valide' : 'document_rejete';
     const notificationTitle = valid ? 'Document validé' : 'Nouvelle version requise';
+    const notificationBody = valid
+      ? `Votre document « ${document.type_document} » du dossier ${document.numero_dossier} a été validé.`
+      : `Votre document « ${document.type_document} » du dossier ${document.numero_dossier} a été rejeté : ${reason}. Merci d’en téléverser une nouvelle version.`;
       const connection = await pool.getConnection();
       try {
         await connection.beginTransaction();

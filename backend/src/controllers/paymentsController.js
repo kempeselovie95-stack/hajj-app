@@ -20,15 +20,27 @@ const listerPaiements = async (req, res, next) => {
 
     const [paiements] = await pool.execute(
       `SELECT p.id,p.dossier_id,p.montant,p.devise,p.statut,p.moyen_paiement,p.reference,p.commentaire,p.cree_le,p.confirme_le,
-        d.numero_dossier,d.annee_hajj,CONCAT(u.prenom,' ',u.nom) AS pelerin_nom,f.nom AS forfait_nom
+        d.numero_dossier,d.annee_hajj,d.qr_token,CONCAT(u.prenom,' ',u.nom) AS pelerin_nom,u.telephone AS pelerin_tel,u.email AS pelerin_email,
+        ag.nom_agence AS agence_nom,f.nom AS forfait_nom,CAST(f.prix AS DOUBLE) AS forfait_prix,
+        (SELECT COALESCE(SUM(x.montant),0) FROM paiements x WHERE x.dossier_id=p.dossier_id AND x.statut='valide') AS total_paye
        FROM paiements p
        JOIN dossiers d ON d.id=p.dossier_id
        JOIN utilisateurs u ON u.id=d.pelerin_id
+       LEFT JOIN agences ag ON ag.id=d.agence_id
        LEFT JOIN forfaits f ON f.id=p.forfait_id
        WHERE d.annee_hajj=? ${scope.clause}
        ORDER BY p.cree_le DESC,p.id DESC LIMIT 250`,
       [year, ...scope.values]
     );
+    // Le reçu porte le QR Code du pèlerin (jeton opaque déjà utilisé pour le pointage) : on le crée au besoin.
+    for (const payment of paiements) {
+      if (payment.statut === 'valide' && !payment.qr_token) {
+        const token = require('crypto').randomBytes(24).toString('hex');
+        await pool.execute('UPDATE dossiers SET qr_token=? WHERE id=? AND qr_token IS NULL', [token, payment.dossier_id]);
+        const [[fresh]] = await pool.execute('SELECT qr_token FROM dossiers WHERE id=?', [payment.dossier_id]);
+        for (const other of paiements) if (other.dossier_id === payment.dossier_id) other.qr_token = fresh.qr_token;
+      }
+    }
     const [dossiers] = await pool.execute(
       `SELECT d.id,d.numero_dossier,d.annee_hajj,d.statut,d.forfait_id,CONCAT(u.prenom,' ',u.nom) AS pelerin_nom,
         f.nom AS forfait_nom,f.prix AS forfait_prix,f.devise,

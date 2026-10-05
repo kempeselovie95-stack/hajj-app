@@ -7,6 +7,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { validationResult } = require('express-validator');
 const { pool } = require('../config/database');
+const { ensurePilgrimSetup } = require('../services/onboarding');
 
 async function affecterGroupeDisponible(utilisateurId) {
   const connection = await pool.getConnection();
@@ -73,6 +74,7 @@ const seConnecter = async (req, res, next) => {
     }
 
     const groupeAssigne = utilisateur.role === 'encadreur' ? await affecterGroupeDisponible(utilisateur.id) : null;
+    if (utilisateur.role === 'pelerin') await ensurePilgrimSetup(utilisateur.id); // comptes existants : dossier + groupe si absents
     const token = genererToken(utilisateur);
 
     // Ne jamais renvoyer le mot de passe hashé
@@ -99,7 +101,7 @@ const sInscrire = async (req, res, next) => {
       return res.status(400).json({ succes: false, erreurs: erreurs.array() });
     }
 
-    const { nom, prenom, email, telephone, mot_de_passe } = req.body;
+    const { nom, prenom, email, telephone, mot_de_passe, agence_id } = req.body;
 
     // Vérifier l'unicité de l'email
     const [existant] = await pool.execute(
@@ -128,6 +130,7 @@ const sInscrire = async (req, res, next) => {
       role:      'pelerin',
     };
 
+    const setup = await ensurePilgrimSetup(resultat.insertId, { agenceId: Number(agence_id) || null });
     const token = genererToken(nouvelUtilisateur);
 
     res.status(201).json({
@@ -136,6 +139,8 @@ const sInscrire = async (req, res, next) => {
       token,
       user: nouvelUtilisateur,
       utilisateur: nouvelUtilisateur,
+      dossier_id: setup.dossierId,
+      groupe_id: setup.groupId,
     });
   } catch (error) {
     next(error);
@@ -146,7 +151,7 @@ const sInscrire = async (req, res, next) => {
 const obtenirProfil = async (req, res, next) => {
   try {
     const [rows] = await pool.execute(
-      `SELECT id, nom, prenom, email, telephone, role, created_at AS cree_le
+      `SELECT id, nom, prenom, email, telephone, role, theme, created_at AS cree_le
        FROM utilisateurs WHERE id = ?`,
       [req.utilisateur.id]
     );
@@ -181,18 +186,24 @@ const mettreAJourProfil = async (req, res, next) => {
   try {
     const erreurs = validationResult(req);
     if (!erreurs.isEmpty()) return res.status(400).json({ succes: false, erreurs: erreurs.array() });
-    const { nom, prenom, email, telephone, mot_de_passe, ancien_mot_de_passe } = req.body;
+    const { nom, prenom, email, telephone, mot_de_passe, ancien_mot_de_passe, theme } = req.body;
     const [currentRows] = await pool.execute('SELECT mot_de_passe, telephone FROM utilisateurs WHERE id=?', [req.utilisateur.id]);
     if (!currentRows.length) return res.status(404).json({ succes: false, message: 'Utilisateur introuvable' });
     if (mot_de_passe) {
       if (!ancien_mot_de_passe || !(await bcrypt.compare(ancien_mot_de_passe, currentRows[0].mot_de_passe))) return res.status(400).json({ succes: false, message: 'Ancien mot de passe incorrect' });
     }
-    const values = [nom, prenom, email.toLowerCase().trim(), telephone || currentRows[0].telephone];
-    let query = 'UPDATE utilisateurs SET nom=?, prenom=?, email=?, telephone=?';
-    if (mot_de_passe) { query += ', mot_de_passe=?'; values.push(await bcrypt.hash(mot_de_passe, 12)); }
-    query += ' WHERE id=?'; values.push(req.utilisateur.id);
+    // Mise à jour partielle : seuls les champs fournis sont modifiés (le mot de passe se change seul depuis « Sécurité »).
+    const sets = []; const values = [];
+    if (theme !== undefined) { sets.push('theme=?'); values.push(theme); }
+    if (nom !== undefined) { sets.push('nom=?'); values.push(nom); }
+    if (prenom !== undefined) { sets.push('prenom=?'); values.push(prenom); }
+    if (email !== undefined) { sets.push('email=?'); values.push(email.toLowerCase().trim()); }
+    if (telephone !== undefined) { sets.push('telephone=?'); values.push(telephone || currentRows[0].telephone || ''); }
+    if (mot_de_passe) { sets.push('mot_de_passe=?'); values.push(await bcrypt.hash(mot_de_passe, 12)); }
+    if (!sets.length) return res.status(400).json({ succes: false, message: 'Aucune modification fournie' });
+    const query = `UPDATE utilisateurs SET ${sets.join(', ')} WHERE id=?`; values.push(req.utilisateur.id);
     await pool.execute(query, values);
-    const [rows] = await pool.execute('SELECT id,nom,prenom,email,telephone,role,created_at AS cree_le FROM utilisateurs WHERE id=?', [req.utilisateur.id]);
+    const [rows] = await pool.execute('SELECT id,nom,prenom,email,telephone,role,theme FROM utilisateurs WHERE id=?', [req.utilisateur.id]);
     res.json({ succes: true, user: rows[0], utilisateur: rows[0] });
   } catch (error) { next(error); }
 };

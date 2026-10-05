@@ -1,177 +1,83 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { LANGUAGES, LOCALES, translate } from '@hajj/shared';
 
 const STORAGE_KEY = 'hajj_language';
-const LANGUAGES = [
-  { code: 'en', label: 'English', shortLabel: 'EN' },
-  { code: 'fr', label: 'Français', shortLabel: 'FR' },
-  { code: 'ar', label: 'العربية', shortLabel: 'AR' },
-];
+const DEFAULT_LANGUAGE = 'fr';
+const SUPPORTED = LANGUAGES.map((item) => item.code);
 
-const MESSAGES = {
-  en: {
-    dashboard: 'Dashboard',
-    overview: 'Overview',
-    agencies: 'Agencies',
-    dossiers: 'Applications',
-    pilgrims: 'Pilgrims',
-    notifications: 'Notifications',
-    payments: 'Payments',
-    documents: 'Documents',
-    groups: 'Groups',
-    guides: 'Guides',
-    travel: 'Trips',
-    presence: 'QR & Presence',
-    logout: 'Log out',
-    language: 'Language',
-    welcome: 'Welcome',
-    connected: 'Your account is connected to the backend.',
-    myApplications: 'My applications',
-    noApplications: 'No application yet.',
-    loading: 'Loading...',
-    allApplications: 'All applications',
-    allAgencies: 'All agencies',
-    registeredAgencies: 'Registered agencies',
-    registeredPilgrims: 'Registered pilgrims',
-    activeApplications: 'Active applications',
-    noData: 'No data available yet.',
-    search: 'Search',
-    encadreurs: 'Guides',
-    profile: 'Profile',
-    operations: 'Operations',
-    loginKicker: 'Pilgrimage management',
-    loginSubtitle: 'Sign in to access your workspace.',
-    emailField: 'Email',
-    passwordField: 'Password',
-    signIn: 'Sign in',
-    signingIn: 'Signing in…',
-    newPilgrim: 'New pilgrim?',
-    createAccount: 'Create an account',
-    emailRequired: 'Email is required.',
-    invalidEmail: 'Enter a valid email address.',
-    passwordRequired: 'Password is required.',
-    invalidCredentials: 'Incorrect email or password.',
-    loginError: 'Something went wrong. Please try again.',
-    roleAdmin: 'Administrator',
-    roleAgency: 'Agency manager',
-    roleGuide: 'Guide',
-    rolePilgrim: 'Pilgrim',
-  },
-  fr: {
-    dashboard: 'Tableau de bord',
-    overview: "Vue d'ensemble",
-    agencies: 'Agences',
-    dossiers: 'Dossiers',
-    pilgrims: 'Pèlerins',
-    notifications: 'Notifications',
-    payments: 'Paiements',
-    documents: 'Documents',
-    groups: 'Groupes',
-    guides: 'Guides',
-    travel: 'Voyages',
-    presence: 'QR & Présence',
-    logout: 'Déconnexion',
-    language: 'Langue',
-    welcome: 'Bienvenue',
-    connected: 'Ton compte est connecté au backend.',
-    myApplications: 'Mes dossiers',
-    noApplications: 'Aucun dossier pour le moment.',
-    loading: 'Chargement…',
-    allApplications: 'Tous les dossiers',
-    allAgencies: 'Toutes les agences',
-    registeredAgencies: 'Agences enregistrées',
-    registeredPilgrims: 'Pèlerins inscrits',
-    activeApplications: 'Dossiers actifs',
-    noData: 'Aucune donnée disponible pour le moment.',
-    search: 'Rechercher',
-    encadreurs: 'Encadreurs',
-    profile: 'Profil',
-    operations: 'Opérations',
-    loginKicker: 'Gestion du pèlerinage',
-    loginSubtitle: 'Connecte-toi pour accéder à ton espace.',
-    emailField: 'Email',
-    passwordField: 'Mot de passe',
-    signIn: 'Se connecter',
-    signingIn: 'Connexion…',
-    newPilgrim: 'Nouveau pèlerin ?',
-    createAccount: 'Créer un compte',
-    emailRequired: "L'email est requis.",
-    invalidEmail: "Format d'email invalide.",
-    passwordRequired: 'Le mot de passe est requis.',
-    invalidCredentials: 'Email ou mot de passe incorrect.',
-    loginError: 'Une erreur est survenue. Réessaie.',
-    roleAdmin: 'Administrateur',
-    roleAgency: 'Responsable d’agence',
-    roleGuide: 'Guide',
-    rolePilgrim: 'Pèlerin',
-  },
-  ar: {
-    dashboard: 'لوحة التحكم',
-    overview: 'نظرة عامة',
-    agencies: 'الوكالات',
-    dossiers: 'الملفات',
-    pilgrims: 'الحجاج',
-    notifications: 'الإشعارات',
-    payments: 'المدفوعات',
-    documents: 'الوثائق',
-    groups: 'المجموعات',
-    guides: 'المرشدون',
-    travel: 'الرحلات',
-    presence: 'QR والحضور',
-    logout: 'تسجيل الخروج',
-    language: 'اللغة',
-    welcome: 'مرحباً',
-    connected: 'حسابك متصل بالخادم.',
-    myApplications: 'ملفاتي',
-    noApplications: 'لا يوجد ملف حتى الآن.',
-    loading: 'جار التحميل...',
-    allApplications: 'كل الملفات',
-    allAgencies: 'كل الوكالات',
-    registeredAgencies: 'الوكالات المسجلة',
-    registeredPilgrims: 'الحجاج المسجلون',
-    activeApplications: 'الملفات النشطة',
-    noData: 'لا توجد بيانات متاحة حالياً.',
-    search: 'بحث',
-    encadreurs: 'المرشدون',
-    profile: 'الملف الشخصي',
-    operations: 'العمليات',
-    loginKicker: 'إدارة الحج',
-    loginSubtitle: 'سجّل الدخول للوصول إلى حسابك.',
-    emailField: 'البريد الإلكتروني',
-    passwordField: 'كلمة المرور',
-    signIn: 'تسجيل الدخول',
-    signingIn: 'جارٍ تسجيل الدخول…',
-    newPilgrim: 'حاج جديد؟',
-    createAccount: 'إنشاء حساب',
-    emailRequired: 'البريد الإلكتروني مطلوب.',
-    invalidEmail: 'أدخل عنوان بريد إلكتروني صالحاً.',
-    passwordRequired: 'كلمة المرور مطلوبة.',
-    invalidCredentials: 'البريد الإلكتروني أو كلمة المرور غير صحيحة.',
-    loginError: 'حدث خطأ. حاول مرة أخرى.',
-    roleAdmin: 'مسؤول النظام',
-    roleAgency: 'مسؤول الوكالة',
-    roleGuide: 'مرشد',
-    rolePilgrim: 'حاج',
-  },
-};
+function readStoredLanguage() {
+  try {
+    const stored = window.localStorage.getItem(STORAGE_KEY);
+    if (SUPPORTED.includes(stored)) return stored;
+  } catch { /* stockage indisponible (navigation privée…) : on retombe sur la langue du navigateur */ }
+  const browser = (typeof navigator !== 'undefined' ? navigator.language : '')?.slice(0, 2).toLowerCase();
+  return SUPPORTED.includes(browser) ? browser : DEFAULT_LANGUAGE;
+}
 
 const LanguageContext = createContext(null);
 
+/**
+ * Source unique de la langue de l'application : le sélecteur de la page de
+ * connexion (et celui de la barre du haut) modifient cet état, ce qui
+ * re-rend tous les écrans. Fournit aussi les formateurs liés à la locale
+ * (dates, nombres, montants) pour que rien ne reste figé en français.
+ */
 export function LanguageProvider({ children }) {
-  const [language, setLanguage] = useState(() => localStorage.getItem(STORAGE_KEY) || 'en');
+  const [language, setLanguageState] = useState(readStoredLanguage);
+
+  const setLanguage = useCallback((code) => {
+    setLanguageState(SUPPORTED.includes(code) ? code : DEFAULT_LANGUAGE);
+  }, []);
 
   useEffect(() => {
-    const selected = LANGUAGES.some((item) => item.code === language) ? language : 'en';
-    localStorage.setItem(STORAGE_KEY, selected);
-    document.documentElement.lang = selected;
-    document.documentElement.dir = selected === 'ar' ? 'rtl' : 'ltr';
+    try { window.localStorage.setItem(STORAGE_KEY, language); } catch { /* non bloquant */ }
+    document.documentElement.lang = language;
+    document.documentElement.dir = language === 'ar' ? 'rtl' : 'ltr';
   }, [language]);
 
-  const value = useMemo(() => ({
-    language,
-    languages: LANGUAGES,
-    setLanguage,
-    t: (key) => MESSAGES[language]?.[key] ?? MESSAGES.en[key] ?? key,
-  }), [language]);
+  const value = useMemo(() => {
+    const locale = LOCALES[language] ?? LOCALES[DEFAULT_LANGUAGE];
+    const toDate = (input) => {
+      if (!input) return null;
+      const date = input instanceof Date ? input : new Date(input);
+      return Number.isNaN(date.getTime()) ? null : date;
+    };
+    const formatNumber = (input, options) => new Intl.NumberFormat(locale, { maximumFractionDigits: 0, ...options }).format(Number(input || 0));
+    return {
+      language,
+      locale,
+      dir: language === 'ar' ? 'rtl' : 'ltr',
+      languages: LANGUAGES,
+      setLanguage,
+      t: (key, values) => translate(language, key, values),
+      formatNumber,
+      formatCurrency: (input, currency = 'XAF') => `${formatNumber(input)} ${currency === 'XAF' ? translate(language, 'ad_currency') : currency}`,
+      formatDate: (input, options = { dateStyle: 'medium' }) => {
+        const date = toDate(input);
+        return date ? new Intl.DateTimeFormat(locale, options).format(date) : '—';
+      },
+      formatDateTime: (input) => {
+        const date = toDate(input);
+        return date ? new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(date) : '—';
+      },
+      formatTime: (input) => {
+        const date = toDate(input);
+        return date ? new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit' }).format(date) : '—';
+      },
+      formatRelativeTime: (input) => {
+        const date = toDate(input);
+        if (!date) return '—';
+        const diffSeconds = Math.round((date.getTime() - Date.now()) / 1000);
+        const absolute = Math.abs(diffSeconds);
+        const rtf = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
+        if (absolute < 60) return rtf.format(0, 'second');
+        if (absolute < 3600) return rtf.format(Math.round(diffSeconds / 60), 'minute');
+        if (absolute < 86400) return rtf.format(Math.round(diffSeconds / 3600), 'hour');
+        if (absolute < 7 * 86400) return rtf.format(Math.round(diffSeconds / 86400), 'day');
+        return new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(date);
+      },
+    };
+  }, [language, setLanguage]);
 
   return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
 }

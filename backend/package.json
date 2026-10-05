@@ -7,7 +7,12 @@
     "start": "node src/Server.js",
     "dev": "nodemon src/Server.js",
     "db:migrate": "node src/Migrate.js",
-    "db:seed": "node src/Seed.js"
+    "db:seed": "node src/Seed.js",
+    "db:seed:operations": "node src/SeedOperations.js",
+    "db:seed:content": "node src/SeedContent.js",
+    "test:smoke": "node tests/smoke.integration.cjs",
+    "test:roles": "node tests/roles.integration.cjs",
+    "test:operations": "node tests/operations.integration.cjs"
   },
   "dependencies": {
     "axios": "^1.19.0",

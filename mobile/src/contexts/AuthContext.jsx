@@ -1,7 +1,10 @@
-import { createContext, useContext, useEffect, useMemo, useState, useCallback } from 'react';
-import * as SecureStore from 'expo-secure-store';
+import { createContext, useContext, useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { storage } from '../storage.js';
+import { useDataSync } from '../sync/DataSyncContext.jsx';
 import Constants from 'expo-constants';
 import { createApiClient, createHajjApi } from '@hajj/shared';
+import { Platform } from 'react-native';
+import { readThemePreference, saveThemePreference } from '../themeBoot.js';
 
 const TOKEN_STORAGE_KEY = 'hajj_token';
 const BACKEND_PORT = 3000;
@@ -31,13 +34,18 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const { bump } = useDataSync();
+  const bumpRef = useRef(bump);
+  bumpRef.current = bump;
 
   const api = useMemo(() => {
     const client = createApiClient({
       baseURL: API_BASE_URL,
-      getToken: () => SecureStore.getItemAsync(TOKEN_STORAGE_KEY),
+      getToken: () => storage.get(TOKEN_STORAGE_KEY),
+      // Chaque écriture réussie déclenche le rafraîchissement des écrans « live ».
+      onMutation: () => bumpRef.current(),
       onUnauthorized: async () => {
-        await SecureStore.deleteItemAsync(TOKEN_STORAGE_KEY);
+        await storage.remove(TOKEN_STORAGE_KEY);
         setUser(null);
       },
     });
@@ -48,7 +56,7 @@ export function AuthProvider({ children }) {
     let mounted = true;
 
     (async () => {
-      const token = await SecureStore.getItemAsync(TOKEN_STORAGE_KEY);
+      const token = await storage.get(TOKEN_STORAGE_KEY);
       if (!token) {
         if (mounted) setIsLoading(false);
         return;
@@ -58,7 +66,7 @@ export function AuthProvider({ children }) {
         const data = await api.auth.me();
         if (mounted) setUser(data.user);
       } catch {
-        await SecureStore.deleteItemAsync(TOKEN_STORAGE_KEY);
+        await storage.remove(TOKEN_STORAGE_KEY);
       } finally {
         if (mounted) setIsLoading(false);
       }
@@ -69,22 +77,36 @@ export function AuthProvider({ children }) {
     };
   }, [api]);
 
+  // Le thème choisi sur le compte (autre appareil, web…) s'applique à la connexion.
+  useEffect(() => {
+    if (!user?.theme || user.theme === readThemePreference()) return;
+    const reload = saveThemePreference(user.theme);
+    if (reload && Platform.OS === 'web') window.location.reload();
+  }, [user?.theme]);
+
   const login = useCallback(async (email, password) => {
     const { token, user: loggedUser } = await api.auth.login(email, password);
-    await SecureStore.setItemAsync(TOKEN_STORAGE_KEY, token);
+    await storage.set(TOKEN_STORAGE_KEY, token);
     setUser(loggedUser);
     return loggedUser;
   }, [api]);
 
   const register = useCallback(async (payload) => {
     const { token, user: newUser } = await api.auth.registerPelerin(payload);
-    await SecureStore.setItemAsync(TOKEN_STORAGE_KEY, token);
+    await storage.set(TOKEN_STORAGE_KEY, token);
     setUser(newUser);
     return newUser;
   }, [api]);
 
+  const loginWithGoogle = useCallback(async (credential) => {
+    const { token, user: googleUser } = await api.auth.google(credential);
+    await storage.set(TOKEN_STORAGE_KEY, token);
+    setUser(googleUser);
+    return googleUser;
+  }, [api]);
+
   const logout = useCallback(async () => {
-    await SecureStore.deleteItemAsync(TOKEN_STORAGE_KEY);
+    await storage.remove(TOKEN_STORAGE_KEY);
     setUser(null);
   }, []);
 
@@ -95,8 +117,8 @@ export function AuthProvider({ children }) {
   }, [api]);
 
   const value = useMemo(
-    () => ({ user, isAuthenticated: !!user, isLoading, login, register, logout, updateProfile, api, apiBaseUrl: API_BASE_URL }),
-    [user, isLoading, login, register, logout, updateProfile, api]
+    () => ({ user, isAuthenticated: !!user, isLoading, login, register, loginWithGoogle, logout, updateProfile, api, apiBaseUrl: API_BASE_URL }),
+    [user, isLoading, login, register, loginWithGoogle, logout, updateProfile, api]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

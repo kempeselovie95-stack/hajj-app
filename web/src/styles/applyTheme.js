@@ -1,27 +1,27 @@
-import { THEME } from '@hajj/shared';
+import { THEME, LIGHT_COLORS, DARK_COLORS } from '@hajj/shared';
 
-const CSS_VAR_MAP = {
-  '--color-primary': THEME.colors.primary,
-  '--color-primary-hover': THEME.colors.primaryHover,
-  '--color-primary-tint': THEME.colors.primaryTint,
-  '--color-accent': THEME.colors.accent,
-  '--color-accent-tint': THEME.colors.accentTint,
-  '--color-background': THEME.colors.background,
-  '--color-surface': THEME.colors.surface,
-  '--color-surface-muted': THEME.colors.surfaceMuted,
-  '--color-border': THEME.colors.border,
-  '--color-text-primary': THEME.colors.textPrimary,
-  '--color-text-secondary': THEME.colors.textSecondary,
-  '--color-success': THEME.colors.success,
-  '--color-success-tint': THEME.colors.successTint,
-  '--color-warning': THEME.colors.warning,
-  '--color-warning-tint': THEME.colors.warningTint,
-  '--color-danger': THEME.colors.danger,
-  '--color-danger-tint': THEME.colors.dangerTint,
-  '--color-info': THEME.colors.info,
-  '--color-info-tint': THEME.colors.infoTint,
-  '--color-neutral': THEME.colors.neutral,
-  '--color-neutral-tint': THEME.colors.neutralTint,
+const buildVars = (c) => ({
+  '--color-primary': c.primary,
+  '--color-primary-hover': c.primaryHover,
+  '--color-primary-tint': c.primaryTint,
+  '--color-accent': c.accent,
+  '--color-accent-tint': c.accentTint,
+  '--color-background': c.background,
+  '--color-surface': c.surface,
+  '--color-surface-muted': c.surfaceMuted,
+  '--color-border': c.border,
+  '--color-text-primary': c.textPrimary,
+  '--color-text-secondary': c.textSecondary,
+  '--color-success': c.success,
+  '--color-success-tint': c.successTint,
+  '--color-warning': c.warning,
+  '--color-warning-tint': c.warningTint,
+  '--color-danger': c.danger,
+  '--color-danger-tint': c.dangerTint,
+  '--color-info': c.info,
+  '--color-info-tint': c.infoTint,
+  '--color-neutral': c.neutral,
+  '--color-neutral-tint': c.neutralTint,
 
   '--radius-sm': `${THEME.radius.sm}px`,
   '--radius-md': `${THEME.radius.md}px`,
@@ -29,12 +29,20 @@ const CSS_VAR_MAP = {
 
   '--shadow-card': THEME.shadow.card,
   '--shadow-elevated': THEME.shadow.elevated,
-};
+});
 
-/** À appeler une seule fois, avant le premier rendu (voir main.jsx). */
-export function applyWebTheme() {
+const STORAGE_KEY = 'hajj_theme';
+export const readStoredTheme = () => { try { return localStorage.getItem(STORAGE_KEY) || 'system'; } catch { return 'system'; } };
+export const storeTheme = (mode) => { try { localStorage.setItem(STORAGE_KEY, mode); } catch { /* non bloquant */ } };
+/** « system » suit le thème de l'appareil. */
+export const resolveTheme = (preference) => (preference === 'dark' || (preference === 'system' && typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light');
+
+/** Applique la palette (variables CSS + attribut data-theme). Appelée au démarrage puis à chaque changement. */
+export function applyWebTheme(preference = readStoredTheme()) {
+  const mode = resolveTheme(preference);
   const root = document.documentElement;
-  Object.entries(CSS_VAR_MAP).forEach(([key, value]) => {
-    root.style.setProperty(key, value);
-  });
+  Object.entries(buildVars(mode === 'dark' ? DARK_COLORS : LIGHT_COLORS)).forEach(([key, value]) => root.style.setProperty(key, value));
+  root.dataset.theme = mode;
+  root.style.colorScheme = mode;
+  return mode;
 }

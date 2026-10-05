@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext.jsx';
+import { useLanguage } from '../../contexts/LanguageContext.jsx';
 
 const EMPTY_FORM = { nom: '', annee_hajj: String(new Date().getFullYear() + 1), agence_id: '', encadreur_id: '' };
 
 export default function GroupsManagementPage() {
   const { api, user } = useAuth();
+  const { t } = useLanguage();
   const isAdmin = user?.role === 'admin';
   const [groups, setGroups] = useState([]);
   const [guides, setGuides] = useState([]);
@@ -38,7 +40,7 @@ export default function GroupsManagementPage() {
         setGuides(guideData.guides ?? []);
         setAgencies(agencyData.agences ?? []);
       })
-      .catch(() => { if (active) setError('Impossible de charger les groupes et les guides.'); })
+      .catch(() => { if (active) setError(t('gr_loadError')); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [api, isAdmin, reloadCount]);
@@ -71,10 +73,10 @@ export default function GroupsManagementPage() {
       if (editor.id) await api.groups.update(editor.id, payload);
       else await api.groups.create(payload);
       setEditor(null);
-      setNotice(editor.id ? 'Groupe mis à jour.' : 'Groupe créé.');
+      setNotice(editor.id ? t('gr_updated') : t('gr_created'));
       setReloadCount((count) => count + 1);
     } catch (requestError) {
-      setError(requestError.response?.data?.message || requestError.response?.data?.erreurs?.[0]?.msg || 'Impossible d’enregistrer le groupe.');
+      setError(requestError.response?.data?.message || requestError.response?.data?.erreurs?.[0]?.msg || t('gr_saveError'));
     } finally { setSaving(false); }
   }
 
@@ -90,7 +92,7 @@ export default function GroupsManagementPage() {
       const target = groups.find((candidate) => Number(candidate.agence_id) === Number(group.agence_id) && Number(candidate.annee_hajj) === Number(group.annee_hajj) && candidate.id !== group.id);
       setMoveTargetId(target ? String(target.id) : '');
     } catch (requestError) {
-      setError(requestError.response?.data?.message || 'Impossible de charger les membres du groupe.');
+      setError(requestError.response?.data?.message || t('gr_membersError'));
     } finally { setMembersLoading(false); }
   }
 
@@ -115,8 +117,8 @@ export default function GroupsManagementPage() {
       await api.groups.addMember(selectedGroup.id, Number(availablePilgrimId));
       await reloadSelectedGroup();
       setAvailablePilgrimId('');
-      setNotice('Pèlerin ajouté au groupe.');
-    } catch (requestError) { setError(requestError.response?.data?.message || 'Impossible d’ajouter le pèlerin.'); }
+      setNotice(t('gr_added'));
+    } catch (requestError) { setError(requestError.response?.data?.message || t('gr_addError')); }
     finally { setWorkingMemberId(null); }
   }
 
@@ -127,8 +129,8 @@ export default function GroupsManagementPage() {
     try {
       await api.groups.removeMember(selectedGroup.id, pilgrimId);
       await reloadSelectedGroup();
-      setNotice('Pèlerin retiré du groupe.');
-    } catch (requestError) { setError(requestError.response?.data?.message || 'Impossible de retirer le pèlerin.'); }
+      setNotice(t('gr_removed'));
+    } catch (requestError) { setError(requestError.response?.data?.message || t('gr_removeError')); }
     finally { setWorkingMemberId(null); }
   }
 
@@ -139,8 +141,8 @@ export default function GroupsManagementPage() {
     try {
       await api.groups.moveMember(moveTargetId, pilgrimId, selectedGroup.id);
       await reloadSelectedGroup();
-      setNotice('Pèlerin déplacé vers le groupe cible.');
-    } catch (requestError) { setError(requestError.response?.data?.message || 'Impossible de déplacer le pèlerin.'); }
+      setNotice(t('gr_moved'));
+    } catch (requestError) { setError(requestError.response?.data?.message || t('gr_moveError')); }
     finally { setWorkingMemberId(null); }
   }
 
@@ -149,49 +151,49 @@ export default function GroupsManagementPage() {
   return (
     <section className="space-y-5 pb-8">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700">Organisation des pèlerins</p><h1 className="mt-1 text-3xl font-semibold text-slate-900">Groupes</h1><p className="mt-2 text-sm text-slate-500">Créer les groupes, affecter un guide et gérer les pèlerins.</p></div>
-        <div className="flex flex-wrap items-center gap-2"><label className="sr-only" htmlFor="group-year">Saison Hajj</label><select id="group-year" value={year} onChange={(event) => setYear(event.target.value)} className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700"><option value={new Date().getFullYear() + 1}>Hajj {new Date().getFullYear() + 1}</option>{[...new Set(groups.map((group) => String(group.annee_hajj)))].filter((item) => item !== String(new Date().getFullYear() + 1)).map((item) => <option key={item} value={item}>Hajj {item}</option>)}</select><button type="button" onClick={openCreate} className="h-10 rounded-lg bg-emerald-700 px-4 text-sm font-semibold text-white hover:bg-emerald-800">+ Créer un groupe</button></div>
+        <div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700">{t('gr_kicker')}</p><h1 className="mt-1 text-3xl font-semibold text-slate-900">{t('gr_title')}</h1><p className="mt-2 text-sm text-slate-500">{t('gr_subtitle')}</p></div>
+        <div className="flex flex-wrap items-center gap-2"><label className="sr-only" htmlFor="group-year">{t('gr_seasonLabel')}</label><select id="group-year" value={year} onChange={(event) => setYear(event.target.value)} className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700"><option value={new Date().getFullYear() + 1}>{t('gr_hajj', { year: new Date().getFullYear() + 1 })}</option>{[...new Set(groups.map((group) => String(group.annee_hajj)))].filter((item) => item !== String(new Date().getFullYear() + 1)).map((item) => <option key={item} value={item}>{t('gr_hajj', { year: item })}</option>)}</select><button type="button" onClick={openCreate} className="h-10 rounded-lg bg-emerald-700 px-4 text-sm font-semibold text-white hover:bg-emerald-800">{t('gr_create')}</button></div>
       </header>
 
       {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
       {notice && <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{notice}</p>}
 
-      <section className="grid gap-3 sm:grid-cols-3" aria-label="Statistiques des groupes">
-        <Stat label="Groupes" value={visibleGroups.length} />
-        <Stat label="Pèlerins répartis" value={memberTotal} />
-        <Stat label="Moyenne par groupe" value={average} />
+      <section className="grid gap-3 sm:grid-cols-3" aria-label={t('gr_statsLabel')}>
+        <Stat label={t('gr_statGroups')} value={visibleGroups.length} />
+        <Stat label={t('gr_statPilgrims')} value={memberTotal} />
+        <Stat label={t('gr_statAverage')} value={average} />
       </section>
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-        {loading ? <p className="p-6 text-sm text-slate-500">Chargement des groupes…</p> : visibleGroups.length === 0 ? <p className="p-8 text-center text-sm text-slate-500">Aucun groupe pour cette saison.</p> : <div className="overflow-x-auto"><table className="w-full min-w-[780px] text-left text-sm">
-          <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-3 font-medium">Code / nom</th><th className="px-4 py-3 font-medium">Guide</th><th className="px-4 py-3 font-medium">Organisation</th><th className="px-4 py-3 font-medium">Pèlerins</th><th className="px-4 py-3 text-right font-medium">Gestion</th></tr></thead>
+        {loading ? <p className="p-6 text-sm text-slate-500">{t('gr_loading')}</p> : visibleGroups.length === 0 ? <p className="p-8 text-center text-sm text-slate-500">{t('gr_empty')}</p> : <div className="overflow-x-auto"><table className="w-full min-w-[780px] text-start text-sm">
+          <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-3 font-medium">{t('gr_colCode')}</th><th className="px-4 py-3 font-medium">{t('gr_colGuide')}</th><th className="px-4 py-3 font-medium">{t('gr_colOrg')}</th><th className="px-4 py-3 font-medium">{t('gr_colPilgrims')}</th><th className="px-4 py-3 text-end font-medium">{t('gr_colManage')}</th></tr></thead>
           <tbody className="divide-y divide-slate-100">{visibleGroups.map((group) => <tr key={group.id}>
             <td className="px-4 py-4"><div className="font-mono text-xs font-semibold text-emerald-800">{groupCode(group)}</div><div className="mt-1 font-medium text-slate-800">{group.nom}</div></td>
-            <td className="px-4 py-4 text-slate-700">{group.encadreur_nom || 'Aucun guide affecté'}</td>
+            <td className="px-4 py-4 text-slate-700">{group.encadreur_nom || t('gr_noGuide')}</td>
             <td className="px-4 py-4 text-slate-600">{group.nom_agence}</td>
             <td className="px-4 py-4 tabular-nums text-slate-700">{group.total_membres}</td>
-            <td className="px-4 py-4"><div className="flex justify-end gap-2"><button type="button" onClick={() => openMembers(group)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">Pèlerins</button><button type="button" onClick={() => openEdit(group)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">Modifier</button></div></td>
+            <td className="px-4 py-4"><div className="flex justify-end gap-2"><button type="button" onClick={() => openMembers(group)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">{t('gr_pilgrimsBtn')}</button><button type="button" onClick={() => openEdit(group)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">{t('gr_editBtn')}</button></div></td>
           </tr>)}</tbody>
         </table></div>}
       </div>
 
       {editor && <Modal onClose={() => setEditor(null)}>
         <form onSubmit={saveGroup} className="space-y-4">
-          <header><h2 className="text-xl font-semibold text-slate-900">{editor.id ? 'Modifier le groupe' : 'Créer un groupe'}</h2><p className="mt-1 text-sm text-slate-500">Le code est généré à partir de la saison et de l’identifiant.</p></header>
-          <Field label="Nom du groupe"><input required maxLength={150} value={form.nom} onChange={(event) => setForm((current) => ({ ...current, nom: event.target.value }))} className="field" placeholder="Groupe Yaoundé 1" /></Field>
-          <Field label="Saison Hajj"><input required type="number" min="2025" max="2100" value={form.annee_hajj} onChange={(event) => setForm((current) => ({ ...current, annee_hajj: event.target.value }))} className="field" /></Field>
-          {isAdmin && <Field label="Organisation"><select required value={form.agence_id} onChange={(event) => setForm((current) => ({ ...current, agence_id: event.target.value, encadreur_id: '' }))} className="field"><option value="">Sélectionner une organisation</option>{agencies.map((agency) => <option key={agency.id} value={agency.id}>{agency.name}</option>)}</select></Field>}
-          <Field label="Guide"><select value={form.encadreur_id} onChange={(event) => setForm((current) => ({ ...current, encadreur_id: event.target.value }))} className="field"><option value="">Aucun guide affecté</option>{eligibleGuides.map((guide) => <option key={guide.id} value={guide.id}>{guide.prenom} {guide.nom} · {guide.nom_agence}</option>)}</select></Field>
-          {editor.id && <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">Pour changer la saison, retire d’abord les pèlerins du groupe.</p>}
+          <header><h2 className="text-xl font-semibold text-slate-900">{editor.id ? t('gr_editTitle') : t('gr_createTitle')}</h2><p className="mt-1 text-sm text-slate-500">{t('gr_codeHint')}</p></header>
+          <Field label={t('gr_fName')}><input required maxLength={150} value={form.nom} onChange={(event) => setForm((current) => ({ ...current, nom: event.target.value }))} className="field" placeholder={t('gr_fNamePlaceholder')} /></Field>
+          <Field label={t('gr_fSeason')}><input required type="number" min="2025" max="2100" value={form.annee_hajj} onChange={(event) => setForm((current) => ({ ...current, annee_hajj: event.target.value }))} className="field" /></Field>
+          {isAdmin && <Field label={t('gr_fOrg')}><select required value={form.agence_id} onChange={(event) => setForm((current) => ({ ...current, agence_id: event.target.value, encadreur_id: '' }))} className="field"><option value="">{t('gr_fOrgChoose')}</option>{agencies.map((agency) => <option key={agency.id} value={agency.id}>{agency.name}</option>)}</select></Field>}
+          <Field label={t('gr_fGuide')}><select value={form.encadreur_id} onChange={(event) => setForm((current) => ({ ...current, encadreur_id: event.target.value }))} className="field"><option value="">{t('gr_noGuide')}</option>{eligibleGuides.map((guide) => <option key={guide.id} value={guide.id}>{guide.prenom} {guide.nom} · {guide.nom_agence}</option>)}</select></Field>
+          {editor.id && <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">{t('gr_seasonWarn')}</p>}
           {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
-          <div className="flex justify-end gap-2"><button type="button" onClick={() => setEditor(null)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600">Annuler</button><button type="submit" disabled={saving} className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{saving ? 'Enregistrement…' : 'Enregistrer'}</button></div>
+          <div className="flex justify-end gap-2"><button type="button" onClick={() => setEditor(null)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600">{t('cancel')}</button><button type="submit" disabled={saving} className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{saving ? t('c_saving') : t('c_save')}</button></div>
         </form>
       </Modal>}
 
       {selectedGroup && <Modal onClose={() => setSelectedGroup(null)} wide>
-        <header className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-mono text-xs font-semibold text-emerald-800">{groupCode(selectedGroup)}</p><h2 className="mt-1 text-xl font-semibold text-slate-900">{selectedGroup.nom}</h2><p className="mt-1 text-sm text-slate-500">{selectedGroup.encadreur_nom || 'Guide non affecté'} · {selectedGroup.total_membres} pèlerins</p></div><span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600">{selectedGroup.annee_hajj}</span></header>
-        <form onSubmit={addPilgrim} className="mt-5 flex flex-col gap-2 sm:flex-row"><label className="min-w-0 flex-1"><span className="sr-only">Ajouter un pèlerin</span><select required value={availablePilgrimId} onChange={(event) => setAvailablePilgrimId(event.target.value)} className="field mt-0"><option value="">Choisir un pèlerin non affecté</option>{addablePilgrims.filter((pilgrim) => Number(pilgrim.groupe_id) !== Number(selectedGroup.id)).map((pilgrim) => <option key={pilgrim.id} value={pilgrim.id}>{pilgrim.prenom} {pilgrim.nom} · {pilgrim.numero_dossier || pilgrim.email}</option>)}</select></label><button type="submit" disabled={!availablePilgrimId || !!workingMemberId} className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Ajouter</button></form>
-        {membersLoading ? <p className="py-8 text-center text-sm text-slate-500">Chargement des pèlerins…</p> : <div className="mt-4 max-h-[48dvh] overflow-auto rounded-lg border border-slate-200"><table className="w-full min-w-[680px] text-left text-sm"><thead className="sticky top-0 bg-slate-50 text-xs text-slate-500"><tr><th className="px-3 py-2">Pèlerin</th><th className="px-3 py-2">Dossier</th><th className="px-3 py-2">Déplacer vers</th><th className="px-3 py-2 text-right">Action</th></tr></thead><tbody className="divide-y divide-slate-100">{selectedGroup.membres.map((member) => <tr key={member.id}><td className="px-3 py-3"><div className="font-medium text-slate-800">{member.prenom} {member.nom}</div><div className="text-xs text-slate-500">{member.telephone || member.email}</div></td><td className="px-3 py-3 text-xs text-slate-500">{member.numero_dossier || '—'}</td><td className="px-3 py-3"><select aria-label={`Groupe cible pour ${member.prenom} ${member.nom}`} value={moveTargetId} onChange={(event) => setMoveTargetId(event.target.value)} className="h-8 max-w-44 rounded-md border border-slate-200 bg-white px-2 text-xs"><option value="">Aucun</option>{groupTargets.map((target) => <option key={target.id} value={target.id}>{target.nom}</option>)}</select></td><td className="px-3 py-3"><div className="flex justify-end gap-2"><button type="button" disabled={!moveTargetId || workingMemberId === member.id} onClick={() => movePilgrim(member.id)} className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-700 disabled:opacity-40">Déplacer</button><button type="button" disabled={workingMemberId === member.id} onClick={() => removePilgrim(member.id)} className="rounded-md px-2 py-1 text-xs text-red-700 hover:bg-red-50 disabled:opacity-40">Retirer</button></div></td></tr>)}{selectedGroup.membres.length === 0 && <tr><td colSpan="4" className="px-3 py-8 text-center text-sm text-slate-500">Aucun pèlerin dans ce groupe.</td></tr>}</tbody></table></div>}
+        <header className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-mono text-xs font-semibold text-emerald-800">{groupCode(selectedGroup)}</p><h2 className="mt-1 text-xl font-semibold text-slate-900">{selectedGroup.nom}</h2><p className="mt-1 text-sm text-slate-500">{selectedGroup.encadreur_nom || t('gr_guideNotAssigned')} · {t('gr_membersCount', { count: selectedGroup.total_membres })}</p></div><span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600">{selectedGroup.annee_hajj}</span></header>
+        <form onSubmit={addPilgrim} className="mt-5 flex flex-col gap-2 sm:flex-row"><label className="min-w-0 flex-1"><span className="sr-only">{t('gr_addPilgrimLabel')}</span><select required value={availablePilgrimId} onChange={(event) => setAvailablePilgrimId(event.target.value)} className="field mt-0"><option value="">{t('gr_addChoose')}</option>{addablePilgrims.filter((pilgrim) => Number(pilgrim.groupe_id) !== Number(selectedGroup.id)).map((pilgrim) => <option key={pilgrim.id} value={pilgrim.id}>{pilgrim.prenom} {pilgrim.nom} · {pilgrim.numero_dossier || pilgrim.email}</option>)}</select></label><button type="submit" disabled={!availablePilgrimId || !!workingMemberId} className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{t('gr_add')}</button></form>
+        {membersLoading ? <p className="py-8 text-center text-sm text-slate-500">{t('gr_membersLoading')}</p> : <div className="mt-4 max-h-[48dvh] overflow-auto rounded-lg border border-slate-200"><table className="w-full min-w-[680px] text-start text-sm"><thead className="sticky top-0 bg-slate-50 text-xs text-slate-500"><tr><th className="px-3 py-2">{t('gr_colPilgrim')}</th><th className="px-3 py-2">{t('gr_colDossier')}</th><th className="px-3 py-2">{t('gr_colMove')}</th><th className="px-3 py-2 text-end">{t('gr_colAction')}</th></tr></thead><tbody className="divide-y divide-slate-100">{selectedGroup.membres.map((member) => <tr key={member.id}><td className="px-3 py-3"><div className="font-medium text-slate-800">{member.prenom} {member.nom}</div><div className="text-xs text-slate-500">{member.telephone || member.email}</div></td><td className="px-3 py-3 text-xs text-slate-500">{member.numero_dossier || '—'}</td><td className="px-3 py-3"><select aria-label={t('gr_targetFor', { name: `${member.prenom} ${member.nom}` })} value={moveTargetId} onChange={(event) => setMoveTargetId(event.target.value)} className="h-8 max-w-44 rounded-md border border-slate-200 bg-white px-2 text-xs"><option value="">{t('gr_moveNone')}</option>{groupTargets.map((target) => <option key={target.id} value={target.id}>{target.nom}</option>)}</select></td><td className="px-3 py-3"><div className="flex justify-end gap-2"><button type="button" disabled={!moveTargetId || workingMemberId === member.id} onClick={() => movePilgrim(member.id)} className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-700 disabled:opacity-40">{t('gr_move')}</button><button type="button" disabled={workingMemberId === member.id} onClick={() => removePilgrim(member.id)} className="rounded-md px-2 py-1 text-xs text-red-700 hover:bg-red-50 disabled:opacity-40">{t('gr_remove')}</button></div></td></tr>)}{selectedGroup.membres.length === 0 && <tr><td colSpan="4" className="px-3 py-8 text-center text-sm text-slate-500">{t('gr_noMembers')}</td></tr>}</tbody></table></div>}
         {error && <p role="alert" className="mt-3 text-sm text-red-700">{error}</p>}
         {notice && <p role="status" className="mt-3 text-sm text-emerald-700">{notice}</p>}
       </Modal>}

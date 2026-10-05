@@ -4,11 +4,10 @@ import { AuthProvider, useAuth } from './contexts/AuthContext.jsx';
 import ProtectedRoute from './routes/ProtectedRoute.jsx';
 import AppShell from './components/layout/AppShell.jsx';
 import LoginPage from './pages/auth/LoginPage.jsx';
+import ForgotPasswordPage from './pages/auth/ForgotPasswordPage.jsx';
 import RegisterPage from './pages/auth/RegisterPage.jsx';
 import PelerinDashboardPage from './pages/pelerin/PelerinDashboardPage.jsx';
 import AdminDashboardPage from './pages/admin/AdminDashboardPage.jsx';
-import AdminDossiersListPage from './pages/admin/AdminDossiersListPage.jsx';
-import AgenceDashboardPage from './pages/agence/AgenceDashboardPage.jsx';
 import DossiersListPage from './pages/agence/DossiersListPage.jsx';
 import DossierDetailPage from './pages/agence/DossierDetailPage.jsx';
 import NotificationsPage from './pages/notifications/NotificationsPage.jsx';
@@ -22,16 +21,30 @@ import PaymentManagementPage from './pages/payments/PaymentManagementPage.jsx';
 import OrganisationsPage from './pages/admin/OrganisationsPage.jsx';
 import DocumentsManagementPage from './pages/documents/DocumentsManagementPage.jsx';
 import GroupsManagementPage from './pages/groups/GroupsManagementPage.jsx';
-import ProfilePage from './pages/account/ProfilePage.jsx';
-import { LanguageProvider } from './contexts/LanguageContext.jsx';
+import SettingsPage from './pages/account/SettingsPage.jsx';
+import CoursesPage from './pages/courses/CoursesPage.jsx';
+import MyCoursesPage from './pages/courses/MyCoursesPage.jsx';
+import NewsPage from './pages/news/NewsPage.jsx';
+import MyGroupPage from './pages/pelerin/MyGroupPage.jsx';
+import TripsPage from './pages/operations/TripsPage.jsx';
+import PresencePage from './pages/operations/PresencePage.jsx';
+import MyTripPage from './pages/operations/MyTripPage.jsx';
+import MyDossierPage from './pages/pelerin/MyDossierPage.jsx';
+import { ThemeProvider } from './contexts/ThemeContext.jsx';
+import { LanguageProvider, useLanguage } from './contexts/LanguageContext.jsx';
+import { DataSyncProvider } from './contexts/DataSyncContext.jsx';
 
 export default function App() {
   return (
     <BrowserRouter>
       <LanguageProvider>
-        <AuthProvider>
-          <AppRoutes />
-        </AuthProvider>
+        <DataSyncProvider>
+          <AuthProvider>
+            <ThemeProvider>
+              <AppRoutes />
+            </ThemeProvider>
+          </AuthProvider>
+        </DataSyncProvider>
       </LanguageProvider>
     </BrowserRouter>
   );
@@ -42,13 +55,18 @@ function AppRoutes() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
 
       {/* Espace pèlerin */}
       <Route element={<ProtectedRoute allowedRoles={[ROLES.PELERIN]} />}>
         <Route element={<AppShell />}>
           <Route path="/dashboard" element={<PelerinDashboardPage />} />
           <Route path="/pelerin/notifications" element={<NotificationsPage />} />
-          <Route path="/pelerin/profile" element={<ProfilePage />} />
+          <Route path="/pelerin/dossier" element={<MyDossierPage />} />
+          <Route path="/pelerin/voyage" element={<MyTripPage />} />
+          <Route path="/pelerin/cours" element={<MyCoursesPage />} />
+          <Route path="/pelerin/groupe" element={<MyGroupPage />} />
+          <Route path="/pelerin/profile" element={<SettingsPage />} />
         </Route>
       </Route>
 
@@ -59,18 +77,21 @@ function AppRoutes() {
           <Route path="/admin/agences" element={<AgenciesPage />} />
           <Route path="/admin/encadreurs" element={<EncadreursPage />} />
           <Route path="/admin/pelerins" element={<PilgrimsPage />} />
-          <Route path="/admin/dossiers" element={<AdminDossiersListPage />} />
+          <Route path="/admin/dossiers" element={<DossiersListPage />} />
+          <Route path="/admin/dossiers/:id" element={<DossierDetailPage />} />
           <Route path="/admin/paiements" element={<PaymentManagementPage />} />
           <Route path="/admin/groupes" element={<GroupsManagementPage />} />
           <Route path="/admin/documents" element={<DocumentsManagementPage />} />
-          <Route path="/admin/voyages" element={<MenuModulePage title="Voyages" />} />
-          <Route path="/admin/presence" element={<MenuModulePage title="QR & Présence" />} />
+          <Route path="/admin/voyages" element={<TripsPage />} />
+          <Route path="/admin/cours" element={<CoursesPage />} />
+          <Route path="/admin/actualites" element={<NewsPage />} />
+          <Route path="/admin/presence" element={<PresencePage />} />
           <Route path="/admin/operations" element={<OperationsPage />} />
           <Route path="/admin/statistiques" element={<AdminDashboardPage />} />
           <Route path="/admin/organisations" element={<OrganisationsPage />} />
-          <Route path="/admin/parametres" element={<ProfilePage />} />
+          <Route path="/admin/parametres" element={<SettingsPage />} />
           <Route path="/admin/notifications" element={<NotificationsPage />} />
-          <Route path="/admin/profile" element={<ProfilePage />} />
+          <Route path="/admin/profile" element={<SettingsPage />} />
           {/* TODO(Phase 3+) : /admin/agences */}
         </Route>
       </Route>
@@ -78,18 +99,20 @@ function AppRoutes() {
       {/* Espace agence */}
       <Route element={<ProtectedRoute allowedRoles={[ROLES.AGENCE]} />}>
         <Route element={<AppShell />}>
-          <Route path="/agence/dashboard" element={<AgenceDashboardPage />} />
+          <Route path="/agence/dashboard" element={<AdminDashboardPage />} />
           <Route path="/agence/dossiers" element={<DossiersListPage />} />
           <Route path="/agence/dossiers/:id" element={<DossierDetailPage />} />
           <Route path="/agence/pelerins" element={<PilgrimsPage />} />
           <Route path="/agence/paiements" element={<PaymentManagementPage />} />
           <Route path="/agence/groupes" element={<GroupsManagementPage />} />
           <Route path="/agence/documents" element={<DocumentsManagementPage />} />
-          <Route path="/agence/guides" element={<MenuModulePage title="Guides" />} />
-          <Route path="/agence/voyages" element={<MenuModulePage title="Voyages" />} />
-          <Route path="/agence/presence" element={<MenuModulePage title="QR & Présence" />} />
+          <Route path="/agence/guides" element={<EncadreursPage />} />
+          <Route path="/agence/voyages" element={<TripsPage />} />
+          <Route path="/agence/cours" element={<CoursesPage />} />
+          <Route path="/agence/actualites" element={<NewsPage />} />
+          <Route path="/agence/presence" element={<PresencePage />} />
           <Route path="/agence/notifications" element={<NotificationsPage />} />
-          <Route path="/agence/profile" element={<ProfilePage />} />
+          <Route path="/agence/profile" element={<SettingsPage />} />
           {/* TODO(Phase 3+) : /agence/pelerins */}
         </Route>
       </Route>
@@ -100,8 +123,10 @@ function AppRoutes() {
           <Route path="/encadreur/dashboard" element={<EncadreurDashboardPage />} />
           <Route path="/encadreur/groupes" element={<EncadreurDashboardPage />} />
           <Route path="/encadreur/groupes/:id/chat" element={<GroupChatPage />} />
+          <Route path="/encadreur/presence" element={<PresencePage />} />
+          <Route path="/encadreur/cours" element={<CoursesPage />} />
           <Route path="/encadreur/notifications" element={<NotificationsPage />} />
-          <Route path="/encadreur/profile" element={<ProfilePage />} />
+          <Route path="/encadreur/profile" element={<SettingsPage />} />
         </Route>
       </Route>
 
@@ -111,11 +136,12 @@ function AppRoutes() {
   );
 }
 
-function MenuModulePage({ title }) {
+function MenuModulePage({ titleKey }) {
+  const { t } = useLanguage();
   return (
     <section className="mx-auto max-w-4xl py-8">
-      <h1 className="text-2xl font-semibold text-slate-800">{title}</h1>
-      <p className="mt-2 text-sm text-slate-500">Ce module est en préparation.</p>
+      <h1 className="text-2xl font-semibold text-slate-800">{t(titleKey)}</h1>
+      <p className="mt-2 text-sm text-slate-500">{t('nav_moduleSoon')}</p>
     </section>
   );
 }

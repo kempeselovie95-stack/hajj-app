@@ -1,8 +1,10 @@
 import { Pressable, View, Text, StyleSheet } from 'react-native';
-import { NOTIFICATION_TYPE_ICON, formatRelativeTime, THEME } from '@hajj/shared';
+import { NOTIFICATION_TYPE_ICON, THEME } from '@hajj/shared';
+import { useLanguage } from '../i18n/LanguageContext.jsx';
 import { FONTS } from '../hooks/useAppFonts.js';
 
 export default function NotificationCard({ notification, onPress }) {
+  const { formatRelativeTime } = useLanguage();
   const { type, titre, message, lue, created_at } = notification;
 
   return (

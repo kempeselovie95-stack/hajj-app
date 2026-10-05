@@ -1,6 +1,7 @@
 import { Modal, View, Text, Pressable, StyleSheet, TextInput } from 'react-native';
 import { THEME } from '@hajj/shared';
 import { FONTS } from '../hooks/useAppFonts.js';
+import { useLanguage } from '../i18n/LanguageContext.jsx';
 
 /**
  * Feuille d'action simple (pas de dépendance à une lib de bottom-sheet
@@ -16,33 +17,35 @@ export default function UploadActionSheet({
   expirationDate,
   onExpirationDateChange,
   onClose,
+  showCamera = true,
   onPickCamera,
   onPickGallery,
   onPickFile,
 }) {
+  const { t } = useLanguage();
   return (
     <Modal visible={isVisible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.overlay} onPress={onClose}>
         <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation?.()}>
           <Text style={styles.title}>{documentLabel}</Text>
-          <Text style={styles.subtitle}>Choisis comment ajouter ce document</Text>
-          <Text style={styles.expirationLabel}>Date d’expiration (facultative)</Text>
+          <Text style={styles.subtitle}>{t('mob_chooseSource')}</Text>
+          <Text style={styles.expirationLabel}>{t('mob_expiryOptional')}</Text>
           <TextInput
-            accessibilityLabel="Date d’expiration du document"
+            accessibilityLabel={t('mob_expiryOptional')}
             value={expirationDate}
             onChangeText={onExpirationDateChange}
-            placeholder="AAAA-MM-JJ"
+            placeholder={t('mob_expiryPlaceholder')}
             keyboardType="numbers-and-punctuation"
             maxLength={10}
             style={styles.expirationInput}
           />
 
-          <SheetOption label="📷  Prendre une photo" onPress={onPickCamera} />
-          <SheetOption label="🖼️  Choisir depuis la galerie" onPress={onPickGallery} />
-          <SheetOption label="📄  Choisir un fichier (PDF)" onPress={onPickFile} />
+          {showCamera ? <SheetOption label={`📷  ${t('mob_takePhoto')}`} onPress={onPickCamera} /> : null}
+          <SheetOption label={`🖼️  ${t('mob_chooseGallery')}`} onPress={onPickGallery} />
+          <SheetOption label={`📄  ${t('mob_chooseFile')}`} onPress={onPickFile} />
 
           <Pressable style={styles.cancelButton} onPress={onClose}>
-            <Text style={styles.cancelText}>Annuler</Text>
+            <Text style={styles.cancelText}>{t('cancel')}</Text>
           </Pressable>
         </Pressable>
       </Pressable>

@@ -1,11 +1,15 @@
 const express = require('express');
 const { body, param, query } = require('express-validator');
 const { authentifier, autoriser } = require('../middleware/Auth');
-const { listerGroupes, listerGuides, listerPelerins, obtenirGroupe, creerGroupe, modifierGroupe, ajouterMembre, retirerMembre, deplacerMembre, listerMessages, envoyerMessage } = require('../controllers/groupsController');
+const { listerGroupes, listerGuides, listerPelerins, obtenirGroupe, creerGroupe, modifierGroupe, ajouterMembre, retirerMembre, deplacerMembre, listerMessages, envoyerMessage, nonLus, marquerLu, demarrerAppel, terminerAppel } = require('../controllers/groupsController');
 
 const router = express.Router();
 router.use(authentifier);
 router.get('/', listerGroupes);
+router.get('/unread', nonLus);
+router.post('/:id/read', param('id').isInt(), marquerLu);
+router.post('/:id/call', param('id').isInt(), demarrerAppel);
+router.post('/:id/call/end', param('id').isInt(), terminerAppel);
 router.get('/guides', autoriser('admin', 'agence'), listerGuides);
 router.get('/pelerins', autoriser('admin', 'agence'), query('annee_hajj').isInt({ min: 2025, max: 2100 }), listerPelerins);
 router.post('/', autoriser('admin', 'agence'), [

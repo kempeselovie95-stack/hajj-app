@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useLanguage } from '../../contexts/LanguageContext.jsx';
 
 /**
  * Modal minimale mais correcte : fermeture au clic sur l'overlay et à
@@ -7,6 +8,7 @@ import { useEffect } from 'react';
  * tant que l'app n'empile pas plusieurs modales.
  */
 export default function Modal({ title, isOpen, onClose, children }) {
+  const { t } = useLanguage();
   useEffect(() => {
     if (!isOpen) return;
     function handleKeyDown(e) {
@@ -36,7 +38,7 @@ export default function Modal({ title, isOpen, onClose, children }) {
           </h2>
           <button
             onClick={onClose}
-            aria-label="Fermer"
+            aria-label={t('c_close')}
             className="text-text-secondary hover:text-text-primary"
           >
             ✕

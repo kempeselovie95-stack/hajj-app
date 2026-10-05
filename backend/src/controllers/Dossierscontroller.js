@@ -2,7 +2,10 @@ const { validationResult } = require('express-validator');
 const { pool } = require('../config/database');
 const { envoyerNotification } = require('../services/notificationService');
 const path = require('path');
+const { assignGroup } = require('../services/onboarding');
+const { STEP_REQUIREMENTS, COMMENT_REQUIRED, computeChecks } = require('../services/dossierValidation');
 
+const REQUIRED_DOCUMENT_TYPES = ['passeport', 'photo_identite', 'certificat_medical', 'certificat_vaccination', 'preuve_paiement'];
 const ALLOWED_TRANSITIONS = {
   brouillon: ['soumis', 'annule'],
   soumis: ['en_verification', 'rejete', 'annule'],
@@ -19,7 +22,7 @@ const STATUS_LABELS = {
 };
 
 async function getDossierAccess(id) {
-  const [rows] = await pool.execute(`SELECT d.*, u.fcm_token, a.utilisateur_id AS agence_user_id FROM dossiers d JOIN utilisateurs u ON u.id=d.pelerin_id LEFT JOIN agences a ON a.id=d.agence_id WHERE d.id=?`, [id]);
+  const [rows] = await pool.execute(`SELECT d.*, u.fcm_token, u.nom, u.prenom, u.telephone, u.email AS pelerin_email, a.nom_agence, a.utilisateur_id AS agence_user_id FROM dossiers d JOIN utilisateurs u ON u.id=d.pelerin_id LEFT JOIN agences a ON a.id=d.agence_id WHERE d.id=?`, [id]);
   return rows[0] || null;
 }
 
@@ -73,7 +76,8 @@ const obtenirDossier = async (req,res,next)=>{try{
   });
   const [historiqueRows]=await pool.execute(`SELECT h.id,h.statut,h.commentaire,h.cree_le,h.modifie_par,CONCAT(u.prenom,' ',u.nom) AS modifie_par_nom FROM historique_statuts h LEFT JOIN utilisateurs u ON u.id=h.modifie_par WHERE h.dossier_id=? ORDER BY h.cree_le ASC`,[req.params.id]);
   const historique=historiqueRows.map((h,i)=>({id:h.id,ancien_statut:i?historiqueRows[i-1].statut:null,nouveau_statut:h.statut,commentaire:h.commentaire,modifie_par_nom:h.modifie_par_nom||'Système',created_at:h.cree_le}));
-  res.json({succes:true,dossier:{...dossier,documents,historique}});
+  const {fcm_token:_push,qr_token:_qr,...publicDossier}=dossier;
+  res.json({succes:true,dossier:{...publicDossier,documents,historique}});
 }catch(e){next(e)}};
 
 const creerDossier = async (req,res,next)=>{try{
@@ -85,6 +89,7 @@ const creerDossier = async (req,res,next)=>{try{
   const numero=await genererNumeroDossier(annee_hajj);
   const [result]=await pool.execute(`INSERT INTO dossiers(pelerin_id,agence_id,numero_dossier,annee_hajj,statut,type_package,saison_id,forfait_id) VALUES(?,?,?,?,?,?,?,?)`,[req.utilisateur.id,agence_id,numero,annee_hajj,'brouillon',type_package,saison_id,forfait_id]);
   await pool.execute(`INSERT INTO historique_statuts(dossier_id,statut,commentaire,modifie_par) VALUES(?,?,?,?)`,[result.insertId,'brouillon','Dossier créé',req.utilisateur.id]);
+  if(agence_id){const c=await pool.getConnection();try{await assignGroup(c,req.utilisateur.id,agence_id,Number(annee_hajj));}finally{c.release();}}
   res.status(201).json({succes:true,message:'Dossier créé avec succès',dossier_id:result.insertId,numero_dossier:numero});
 }catch(e){next(e)}};
 
@@ -92,14 +97,57 @@ const mettreAJourStatut = async (req,res,next)=>{try{
   const errors=validationResult(req); if(!errors.isEmpty())return res.status(400).json({succes:false,erreurs:errors.array()});
   const dossier=await getDossierAccess(req.params.id); if(!dossier)return res.status(404).json({succes:false,message:'Dossier introuvable'});
   if(req.utilisateur.role==='agence'&&dossier.agence_user_id!==req.utilisateur.id)return res.status(403).json({succes:false,message:'Accès refusé'});
+  if(req.utilisateur.role==='pelerin'){
+    // Le pèlerin ne peut que soumettre (ou re-soumettre) SON dossier, une fois les pièces obligatoires envoyées.
+    if(dossier.pelerin_id!==req.utilisateur.id||req.body.statut!=='soumis')return res.status(403).json({succes:false,message:'Accès refusé'});
+    const [docs]=await pool.execute('SELECT type_document FROM documents WHERE dossier_id=?',[dossier.id]);
+    const sent=new Set(docs.map((d)=>d.type_document));
+    const missing=REQUIRED_DOCUMENT_TYPES.filter((type)=>!sent.has(type));
+    if(missing.length)return res.status(422).json({succes:false,code:'DOCUMENTS_MISSING',message:'Documents obligatoires manquants',manquants:missing});
+  }
   const {statut,commentaire}=req.body;
+  if(statut==='soumis'&&req.utilisateur.role!=='pelerin')return res.status(403).json({succes:false,code:'PILGRIM_ONLY',message:'Seul le pèlerin peut soumettre (ou re-soumettre) son dossier.'});
   if(!ALLOWED_TRANSITIONS[dossier.statut]?.includes(statut))return res.status(409).json({succes:false,message:`Transition ${dossier.statut} → ${statut} non autorisée`});
-  await pool.execute('UPDATE dossiers SET statut=? WHERE id=?',[statut,req.params.id]);
+  // Contrôles de validation côté serveur (agence / admin).
+  const extra={};
+  if(statut==='valide'){
+    const {checks}=await computeChecks(dossier.id);
+    const blocking=checks.filter((c)=>c.required&&!c.ok);
+    if(blocking.length)return res.status(422).json({succes:false,code:'VALIDATION_BLOCKED',message:'Le dossier ne remplit pas toutes les conditions de validation.',checks});
+  }
+  const step=STEP_REQUIREMENTS[statut];
+  if(step){
+    const value=String(req.body[step.field]||'').trim();
+    if(!value)return res.status(422).json({succes:false,code:'FIELD_REQUIRED',champ:step.field,message:`${step.label} obligatoire.`});
+    extra[step.field]=value.slice(0,step.max);
+  }
+  if(COMMENT_REQUIRED.has(statut)&&!String(req.body.commentaire||'').trim())return res.status(422).json({succes:false,code:'COMMENT_REQUIRED',message:'Un motif est obligatoire pour rejeter le dossier.'});
+  const sets=['statut=?']; const values=[statut];
+  for(const [column,value] of Object.entries(extra)){sets.push(column+'=?');values.push(value);}
+  if(statut==='transmis_nusuk')sets.push('nusuk_transmis_le=NOW()');
+  if(statut==='confirme')sets.push('nusuk_confirme_le=NOW()');
+  if(statut==='rejete'&&dossier.statut==='transmis_nusuk'){sets.push('nusuk_motif=?');values.push(String(req.body.commentaire).trim().slice(0,1000));}
+  await pool.execute(`UPDATE dossiers SET ${sets.join(', ')} WHERE id=?`,[...values,req.params.id]);
   await pool.execute('INSERT INTO historique_statuts(dossier_id,statut,commentaire,modifie_par) VALUES(?,?,?,?)',[req.params.id,statut,commentaire||null,req.utilisateur.id]);
-  const message=`Votre dossier ${dossier.numero_dossier} est maintenant : ${STATUS_LABELS[statut]||statut}. ${commentaire||''}`.trim();
+  const reference=extra.nusuk_reference?` Référence NUSUK : ${extra.nusuk_reference}.`:extra.nusuk_visa?` Visa : ${extra.nusuk_visa}.`:'';
+  const message=`Votre dossier ${dossier.numero_dossier} est maintenant : ${STATUS_LABELS[statut]||statut}.${reference} ${commentaire||''}`.trim();
   await pool.execute(`INSERT INTO notifications(destinataire_id,titre,corps,type) VALUES(?,?,?,?)`,[dossier.pelerin_id,`Dossier ${dossier.numero_dossier} mis à jour`,message,'statut_dossier']);
   if(dossier.fcm_token) await envoyerNotification(dossier.fcm_token,`Dossier ${dossier.numero_dossier} — Mise à jour`,message);
   res.json({succes:true,message:'Statut mis à jour avec succès'});
 }catch(e){next(e)}};
 
-module.exports={listerDossiers,obtenirDossier,creerDossier,mettreAJourStatut};
+/** Checklist de validation + prochaines étapes possibles (utilisée par le panneau « Validation NUSUK »). */
+const obtenirValidation = async (req,res,next)=>{try{
+  const dossier=await getDossierAccess(req.params.id);
+  if(!dossier)return res.status(404).json({succes:false,message:'Dossier introuvable'});
+  if(req.utilisateur.role==='pelerin'&&dossier.pelerin_id!==req.utilisateur.id)return res.status(403).json({succes:false,message:'Accès refusé'});
+  if(req.utilisateur.role==='agence'&&dossier.agence_user_id!==req.utilisateur.id)return res.status(403).json({succes:false,message:'Accès refusé'});
+  const {checks,solde}=await computeChecks(dossier.id);
+  const canValidate=checks.filter((c)=>c.required).every((c)=>c.ok);
+  const staff=['admin','agence'].includes(req.utilisateur.role);
+  const following=staff?(ALLOWED_TRANSITIONS[dossier.statut]||[]).filter((statut)=>statut!=='soumis').map((statut)=>({statut,champ:STEP_REQUIREMENTS[statut]?.field||null,motif_requis:COMMENT_REQUIRED.has(statut),bloque:statut==='valide'&&!canValidate})):[];
+  res.json({succes:true,statut:dossier.statut,checks,peut_valider:canValidate,solde,suivant:following,
+    nusuk:{reference:dossier.nusuk_reference||null,visa:dossier.nusuk_visa||null,transmis_le:dossier.nusuk_transmis_le||null,confirme_le:dossier.nusuk_confirme_le||null,motif:dossier.nusuk_motif||null}});
+}catch(e){next(e)}};
+
+module.exports={listerDossiers,obtenirDossier,creerDossier,mettreAJourStatut,obtenirValidation};

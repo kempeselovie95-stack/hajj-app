@@ -1,4 +1,5 @@
 const bcrypt = require('bcryptjs');
+const { assignGroup } = require('../services/onboarding');
 const { validationResult } = require('express-validator');
 const { pool } = require('../config/database');
 
@@ -27,7 +28,7 @@ const creerAgence = async (req, res, next) => {
     await connection.beginTransaction();
     const [userResult] = await connection.execute(
       `INSERT INTO utilisateurs (nom, prenom, email, telephone, mot_de_passe, role) VALUES (?, ?, ?, ?, ?, 'agence')`,
-      [nom, prenom, email.toLowerCase().trim(), telephone || null, await bcrypt.hash(mot_de_passe, 12)]
+      [nom, prenom, email.toLowerCase().trim(), telephone?.trim() || '', await bcrypt.hash(mot_de_passe, 12)]
     );
     const [agencyResult] = await connection.execute(
       `INSERT INTO agences (utilisateur_id,nom_agence,numero_agrement,adresse,legal_name,country,phone,email)
@@ -75,7 +76,7 @@ const creerPelerinAvecDossier = async (req, res, next) => {
     const [userResult] = await connection.execute(
       `INSERT INTO utilisateurs (nom,prenom,email,telephone,mot_de_passe,role)
        VALUES (?,?,?,?,?,'pelerin')`,
-      [nom.trim(), prenom.trim(), email.toLowerCase().trim(), telephone?.trim() || null, await bcrypt.hash(mot_de_passe, 12)]
+      [nom.trim(), prenom.trim(), email.toLowerCase().trim(), telephone?.trim() || '', await bcrypt.hash(mot_de_passe, 12)]
     );
     const numeroDossier = `DOS-${season.annee}-${String(userResult.insertId).padStart(6, '0')}`;
     const [dossierResult] = await connection.execute(
@@ -93,6 +94,7 @@ const creerPelerinAvecDossier = async (req, res, next) => {
        VALUES (?, 'Compte et dossier créés', ?, 'info')`,
       [userResult.insertId, `Votre compte pèlerin est prêt. Votre dossier ${numeroDossier} a été créé pour la saison Hajj ${season.annee}.`]
     );
+    if (agence_id) await assignGroup(connection, userResult.insertId, agence_id, Number(season.annee));
     await connection.commit();
     res.status(201).json({
       succes: true,
@@ -154,7 +156,7 @@ const creerEncadreur = async (req, res, next) => {
     }
     const [userResult] = await connection.execute(
       `INSERT INTO utilisateurs (nom, prenom, email, telephone, mot_de_passe, role) VALUES (?, ?, ?, ?, ?, 'encadreur')`,
-      [nom, prenom, email.toLowerCase().trim(), telephone || null, await bcrypt.hash(mot_de_passe, 12)]
+      [nom, prenom, email.toLowerCase().trim(), telephone?.trim() || '', await bcrypt.hash(mot_de_passe, 12)]
     );
     await connection.execute('INSERT INTO encadreurs (utilisateur_id, agence_id) VALUES (?, ?)', [userResult.insertId, agence_id]);
     await connection.commit();

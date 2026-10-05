@@ -6,10 +6,16 @@ const multer = require('multer');
 
 const mediaDir = path.resolve(__dirname, '../uploads/chat');
 fs.mkdirSync(mediaDir, { recursive: true });
+// Formats acceptés : photos (dont HEIC des iPhone), vidéos, notes vocales, PDF et documents Office.
 const allowedMedia = new Set([
-  'image/jpeg', 'image/png', 'image/webp', 'application/pdf',
-  'video/mp4', 'video/quicktime', 'video/webm',
+  'image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif',
+  'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'video/mp4', 'video/quicktime', 'video/webm', 'video/3gpp',
+  'audio/mpeg', 'audio/mp4', 'audio/aac', 'audio/x-m4a', 'audio/m4a', 'audio/wav', 'audio/x-wav', 'audio/ogg', 'audio/webm',
 ]);
+const EXTENSION_MIME = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.jfif': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif', '.heic': 'image/heic', '.heif': 'image/heif', '.pdf': 'application/pdf', '.mp4': 'video/mp4', '.mov': 'video/quicktime', '.webm': 'video/webm', '.3gp': 'video/3gpp', '.mp3': 'audio/mpeg', '.m4a': 'audio/mp4', '.aac': 'audio/aac', '.wav': 'audio/wav', '.ogg': 'audio/ogg', '.doc': 'application/msword', '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' };
+// Certains navigateurs envoient « application/octet-stream » : on retrouve le type par l'extension.
+const resolveMime = (file) => (allowedMedia.has(file.mimetype) ? file.mimetype : EXTENSION_MIME[path.extname(file.originalname || '').toLowerCase()] || null);
 const upload = multer({
   storage: multer.diskStorage({
     destination: (_req, _file, callback) => callback(null, mediaDir),
@@ -19,8 +25,13 @@ const upload = multer({
       callback(null, `${Date.now()}-${Math.random().toString(36).slice(2, 10)}${normalizedExtension}`);
     },
   }),
-  limits: { fileSize: 25 * 1024 * 1024 },
-  fileFilter: (_req, file, callback) => callback(null, allowedMedia.has(file.mimetype)),
+  limits: { fileSize: 50 * 1024 * 1024 },
+  fileFilter: (_req, file, callback) => {
+    const mime = resolveMime(file);
+    if (!mime) return callback(new Error('UNSUPPORTED_MEDIA'));
+    file.mimetype = mime;
+    return callback(null, true);
+  },
 }).single('media');
 
 async function getGroup(id) {
@@ -219,6 +230,88 @@ const deplacerMembre = async (req, res, next) => {
   } finally { connection.release(); }
 };
 
+const realtime = require('../services/realtime');
+const { envoyerNotification } = require('../services/notificationService');
+
+/**
+ * Un nouveau message n'apparaît PAS dans « Notifications » : il est signalé sur « Mon groupe » (compteur de non lus)
+ * par le temps réel (alerte + badge) et, si le téléphone est enregistré, par un push. L'admin n'est jamais prévenu.
+ */
+async function notifyGroupMessage(group, sender, content, hasMedia) {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT u.id, u.fcm_token FROM utilisateurs u WHERE u.est_actif=TRUE AND u.role<>'admin' AND u.id<>? AND (
+         u.id IN (SELECT pelerin_id FROM groupe_membres WHERE groupe_id=?) OR u.id=? OR u.id=(SELECT utilisateur_id FROM agences WHERE id=?))`,
+      [sender.id, group.id, group.encadreur_id || 0, group.agence_id]);
+    const preview = (content || '').slice(0, 140) || (hasMedia ? '📎 Pièce jointe' : '');
+    const payload = { titre: `Nouveau message · ${group.nom}`, corps: `${sender.prenom} ${sender.nom} : ${preview}`, groupe_id: Number(group.id), appel: /^(📞|🎥)/.test(preview) };
+    for (const user of rows) {
+      realtime.toUser(user.id, 'group:unread', payload);
+      envoyerNotification(user.fcm_token, payload.titre, payload.corps);
+    }
+  } catch (error) { console.warn('[chat] alerte non envoyée :', error.message); }
+}
+
+/** L'encadreur (ou l'agence) lance un appel audio ou visio dans le groupe : un message « appel » est publié et tous les membres sont alertés. */
+const demarrerAppel = async (req, res, next) => {
+  try {
+    const kind = req.body.type === 'audio' ? 'audio' : req.body.type === 'video' ? 'video' : null;
+    if (!kind) return res.status(400).json({ succes: false, message: 'Type d’appel invalide (audio ou video).' });
+    const access = await canAccessGroup(req.utilisateur, req.params.id);
+    if (!access.group) return res.status(404).json({ succes: false, message: 'Groupe introuvable' });
+    if (!access.allowed || !['encadreur', 'agence', 'admin'].includes(req.utilisateur.role)) return res.status(403).json({ succes: false, message: 'Seul l’encadreur du groupe peut lancer un appel.' });
+    await pool.execute("UPDATE messages_groupes SET media_type='call/ended' WHERE groupe_id=? AND media_type IN ('call/audio','call/video')", [req.params.id]); // un seul appel actif à la fois
+    const room = `hajjflow-g${req.params.id}-${require('crypto').randomBytes(6).toString('hex')}`;
+    const url = `https://${process.env.JITSI_DOMAIN || 'meet.jit.si'}/${room}`;
+    const label = kind === 'audio' ? '📞 Appel audio en cours' : '🎥 Appel vidéo en cours';
+    const [result] = await pool.execute('INSERT INTO messages_groupes (groupe_id,expediteur_id,contenu,media_url,media_nom,media_type) VALUES (?,?,?,?,?,?)', [req.params.id, req.utilisateur.id, label, url, room, `call/${kind}`]);
+    realtime.toGroup(req.params.id, 'group:message', { groupe_id: Number(req.params.id), id: result.insertId });
+    realtime.toGroup(req.params.id, 'group:call', { groupe_id: Number(req.params.id), type: kind, url, par: `${req.utilisateur.prenom} ${req.utilisateur.nom}` });
+    await notifyGroupMessage(access.group, req.utilisateur, label, false);
+    res.status(201).json({ succes: true, message_id: result.insertId, type: kind, url });
+  } catch (error) { next(error); }
+};
+
+const terminerAppel = async (req, res, next) => {
+  try {
+    const access = await canAccessGroup(req.utilisateur, req.params.id);
+    if (!access.group) return res.status(404).json({ succes: false, message: 'Groupe introuvable' });
+    if (!access.allowed || !['encadreur', 'agence', 'admin'].includes(req.utilisateur.role)) return res.status(403).json({ succes: false, message: 'Accès refusé' });
+    await pool.execute("UPDATE messages_groupes SET media_type='call/ended', contenu='📴 Appel terminé' WHERE groupe_id=? AND media_type IN ('call/audio','call/video')", [req.params.id]);
+    realtime.toGroup(req.params.id, 'group:message', { groupe_id: Number(req.params.id) });
+    res.json({ succes: true });
+  } catch (error) { next(error); }
+};
+
+/** Messages non lus par groupe pour l'utilisateur connecté. */
+const nonLus = async (req, res, next) => {
+  try {
+    const { role, id } = req.utilisateur;
+    let scope = '1=0'; const params = [id, id];
+    if (role === 'pelerin') { scope = 'g.id IN (SELECT groupe_id FROM groupe_membres WHERE pelerin_id=?)'; params.push(id); }
+    else if (role === 'encadreur') { scope = 'g.encadreur_id=?'; params.push(id); }
+    else if (role === 'agence') { scope = 'g.agence_id IN (SELECT id FROM agences WHERE utilisateur_id=?)'; params.push(id); }
+    const [items] = await pool.execute(
+      `SELECT g.id AS groupe_id, g.nom, (SELECT COUNT(*) FROM messages_groupes m WHERE m.groupe_id=g.id AND m.expediteur_id<>? AND m.id > COALESCE((SELECT l.dernier_id FROM groupe_lectures l WHERE l.groupe_id=g.id AND l.utilisateur_id=?),0)) AS non_lus
+       FROM groupes_pelerins g WHERE ${scope}`, params);
+    const list = items.map((row) => ({ ...row, non_lus: Number(row.non_lus) }));
+    res.json({ succes: true, items: list, total: list.reduce((sum, row) => sum + row.non_lus, 0) });
+  } catch (error) { next(error); }
+};
+
+/** Marque la discussion comme lue (jusqu'au dernier message actuel). */
+const marquerLu = async (req, res, next) => {
+  try {
+    const access = await canAccessGroup(req.utilisateur, req.params.id);
+    if (!access.group) return res.status(404).json({ succes: false, message: 'Groupe introuvable' });
+    if (!access.allowed) return res.status(403).json({ succes: false, message: 'Accès refusé' });
+    await pool.execute(
+      `INSERT INTO groupe_lectures (groupe_id, utilisateur_id, dernier_id) VALUES (?,?,COALESCE((SELECT MAX(id) FROM messages_groupes WHERE groupe_id=?),0))
+       ON DUPLICATE KEY UPDATE dernier_id=VALUES(dernier_id)`, [req.params.id, req.utilisateur.id, req.params.id]);
+    res.json({ succes: true });
+  } catch (error) { next(error); }
+};
+
 const listerMessages = async (req, res, next) => {
   try {
     const access = await canAccessGroup(req.utilisateur, req.params.id);
@@ -230,7 +323,7 @@ const listerMessages = async (req, res, next) => {
 };
 
 const envoyerMessage = (req, res, next) => upload(req, res, async (uploadError) => {
-  if (uploadError) return res.status(400).json({ succes: false, message: uploadError.code === 'LIMIT_FILE_SIZE' ? 'Média trop volumineux (25 Mo maximum).' : 'Type de média non supporté.' });
+  if (uploadError) return res.status(400).json({ succes: false, message: uploadError.code === 'LIMIT_FILE_SIZE' ? 'Média trop volumineux (50 Mo maximum).' : 'Type de média non supporté.' });
   try {
     const access = await canAccessGroup(req.utilisateur, req.params.id);
     if (!access.group) return res.status(404).json({ succes: false, message: 'Groupe introuvable' });
@@ -239,8 +332,10 @@ const envoyerMessage = (req, res, next) => upload(req, res, async (uploadError) 
     if (!contenu && !req.file) return res.status(400).json({ succes: false, message: 'Le message ou un média est requis.' });
     const mediaUrl = req.file ? `/uploads/chat/${path.basename(req.file.path)}` : null;
     const [result] = await pool.execute('INSERT INTO messages_groupes (groupe_id,expediteur_id,contenu,media_url,media_nom,media_type,media_taille) VALUES (?,?,?,?,?,?,?)', [req.params.id, req.utilisateur.id, contenu, mediaUrl, req.file?.originalname || null, req.file?.mimetype || null, req.file?.size || null]);
+    realtime.toGroup(req.params.id, 'group:message', { groupe_id: Number(req.params.id), id: result.insertId });
+    await notifyGroupMessage(access.group, req.utilisateur, contenu, Boolean(req.file));
     res.status(201).json({ succes: true, message_id: result.insertId });
   } catch (error) { if (req.file) fs.unlink(req.file.path, () => {}); next(error); }
 });
 
-module.exports = { listerGroupes, listerGuides, listerPelerins, obtenirGroupe, creerGroupe, modifierGroupe, ajouterMembre, retirerMembre, deplacerMembre, listerMessages, envoyerMessage };
+module.exports = { demarrerAppel, terminerAppel, nonLus, marquerLu, canAccessGroup, listerGroupes, listerGuides, listerPelerins, obtenirGroupe, creerGroupe, modifierGroupe, ajouterMembre, retirerMembre, deplacerMembre, listerMessages, envoyerMessage };

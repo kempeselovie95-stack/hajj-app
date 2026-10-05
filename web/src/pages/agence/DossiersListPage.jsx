@@ -2,21 +2,18 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   DOSSIER_STATUS,
-  DOSSIER_STATUS_LABELS,
   DOSSIER_STATUS_COLOR,
   computeDocumentProgress,
-  formatDate,
 } from '@hajj/shared';
 import StatusBadge from '../../components/common/StatusBadge.jsx';
 import ProgressBar from '../../components/common/ProgressBar.jsx';
 import { useAuth } from '../../contexts/AuthContext.jsx';
-
-const STATUS_FILTER_OPTIONS = [{ value: 'all', label: 'Tous les statuts' }].concat(
-  Object.values(DOSSIER_STATUS).map((status) => ({ value: status, label: DOSSIER_STATUS_LABELS[status] }))
-);
+import { useLanguage } from '../../contexts/LanguageContext.jsx';
 
 export default function DossiersListPage() {
-  const { api } = useAuth();
+  const { api, user } = useAuth();
+  const base = user?.role === 'admin' ? '/admin' : '/agence';
+  const { t, formatDate } = useLanguage();
   const [dossiers, setDossiers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -30,13 +27,15 @@ export default function DossiersListPage() {
         if (mounted) setDossiers((data.dossiers ?? []).map(normalizeDossier));
       })
       .catch((requestError) => {
-        if (mounted) setError(requestError.message || 'Impossible de charger les dossiers.');
+        if (mounted) setError(requestError.message || t('dl_loadError'));
       })
       .finally(() => {
         if (mounted) setIsLoading(false);
       });
     return () => { mounted = false; };
   }, [api]);
+
+  const statusOptions = [{ value: 'all', label: t('allStatus') }, ...Object.values(DOSSIER_STATUS).map((status) => ({ value: status, label: t(`status_${status}`) }))];
 
   const filteredDossiers = useMemo(() => {
     return dossiers.filter((dossier) => {
@@ -53,9 +52,9 @@ export default function DossiersListPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-display text-2xl font-semibold text-text-primary">Dossiers</h1>
+        <h1 className="font-display text-2xl font-semibold text-text-primary">{t('dl_title')}</h1>
         <p className="mt-1 font-body text-text-secondary">
-          {filteredDossiers.length} dossier{filteredDossiers.length > 1 ? 's' : ''}
+          {t('dl_count', { count: filteredDossiers.length })}
         </p>
       </div>
 
@@ -64,7 +63,7 @@ export default function DossiersListPage() {
           type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Rechercher par nom ou numéro…"
+          placeholder={t('searchDossiers')}
           className="input-field sm:w-80"
         />
         <select
@@ -72,7 +71,7 @@ export default function DossiersListPage() {
           onChange={(e) => setStatusFilter(e.target.value)}
           className="rounded-md border border-border bg-surface px-4 py-2.5 font-body text-sm text-text-primary focus:border-primary focus:outline-none"
         >
-          {STATUS_FILTER_OPTIONS.map((opt) => (
+          {statusOptions.map((opt) => (
             <option key={opt.value} value={opt.value}>
               {opt.label}
             </option>
@@ -82,22 +81,22 @@ export default function DossiersListPage() {
 
       <div className="card overflow-hidden !p-0">
         {isLoading ? (
-          <p className="p-6 text-center font-body text-sm text-text-secondary">Chargement des dossiers…</p>
+          <p className="p-6 text-center font-body text-sm text-text-secondary">{t('dl_loading')}</p>
         ) : error ? (
           <p className="p-6 text-center font-body text-sm text-danger">{error}</p>
         ) : filteredDossiers.length === 0 ? (
           <p className="p-6 text-center font-body text-sm text-text-secondary">
-            Aucun dossier ne correspond à cette recherche.
+            {t('dl_noMatch')}
           </p>
         ) : (
-          <table className="w-full text-left">
+          <table className="w-full text-start">
             <thead>
               <tr className="border-b border-border bg-surface-muted">
-                <Th>Dossier</Th>
-                <Th>Pèlerin</Th>
-                <Th>Documents</Th>
-                <Th>Statut</Th>
-                <Th>Créé le</Th>
+                <Th>{t('dossier')}</Th>
+                <Th>{t('pilgrim')}</Th>
+                <Th>{t('documents')}</Th>
+                <Th>{t('status')}</Th>
+                <Th>{t('createdAt')}</Th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -107,7 +106,7 @@ export default function DossiersListPage() {
                   <tr key={dossier.id} className="hover:bg-surface-muted">
                     <td className="px-4 py-3">
                       <Link
-                        to={`/agence/dossiers/${dossier.id}`}
+                        to={`${base}/dossiers/${dossier.id}`}
                         className="font-mono text-sm font-medium text-primary hover:text-primary-hover"
                       >
                         {dossier.numero_dossier}
@@ -123,7 +122,7 @@ export default function DossiersListPage() {
                     </td>
                     <td className="px-4 py-3">
                       <StatusBadge
-                        label={DOSSIER_STATUS_LABELS[dossier.statut]}
+                        label={t(`status_${dossier.statut}`)}
                         semantic={DOSSIER_STATUS_COLOR[dossier.statut]}
                       />
                     </td>

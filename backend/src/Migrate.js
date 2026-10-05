@@ -11,6 +11,20 @@ const compatibility = [
   `ALTER TABLE dossiers ADD COLUMN saison_id INT NULL`,
   `ALTER TABLE dossiers ADD COLUMN forfait_id INT NULL`,
   `ALTER TABLE agences ADD COLUMN legal_name VARCHAR(200) NULL`,
+  `DELETE FROM notifications WHERE type='message'`,
+  `ALTER TABLE utilisateurs ADD COLUMN theme ENUM('system','light','dark') NOT NULL DEFAULT 'system'`,
+  `ALTER TABLE utilisateurs ADD COLUMN reset_code_hash VARCHAR(100) NULL`,
+  `ALTER TABLE utilisateurs ADD COLUMN reset_expire DATETIME NULL`,
+  `ALTER TABLE utilisateurs ADD COLUMN reset_tentatives TINYINT NOT NULL DEFAULT 0`,
+  `ALTER TABLE dossiers ADD COLUMN nusuk_reference VARCHAR(100) NULL`,
+  `ALTER TABLE dossiers ADD COLUMN nusuk_visa VARCHAR(100) NULL`,
+  `ALTER TABLE dossiers ADD COLUMN nusuk_transmis_le DATETIME NULL`,
+  `ALTER TABLE dossiers ADD COLUMN nusuk_confirme_le DATETIME NULL`,
+  `ALTER TABLE dossiers ADD COLUMN nusuk_motif TEXT NULL`,
+  `ALTER TABLE actualites ADD COLUMN image_url VARCHAR(500) NULL`,
+  `ALTER TABLE actualites ADD COLUMN source_url VARCHAR(500) NULL`,
+  `ALTER TABLE actualites ADD COLUMN source_nom VARCHAR(120) NULL`,
+  `ALTER TABLE actualites ADD KEY idx_actualites_source (source_url(191))`,
   `ALTER TABLE agences ADD COLUMN country VARCHAR(100) NOT NULL DEFAULT 'Cameroun'`,
   `ALTER TABLE agences ADD COLUMN city VARCHAR(100) NULL`,
   `ALTER TABLE agences ADD COLUMN phone VARCHAR(30) NULL`,
@@ -26,9 +40,23 @@ const compatibility = [
   `ALTER TABLE documents ADD COLUMN motif_rejet VARCHAR(1000) NULL`,
   `ALTER TABLE documents ADD COLUMN expiration_date DATE NULL`,
   `UPDATE documents SET statut=CASE WHEN est_valide=TRUE THEN 'APPROVED' WHEN est_valide=FALSE THEN 'REJECTED' ELSE 'PENDING' END WHERE statut='PENDING'`,
-  `ALTER TABLE notifications MODIFY COLUMN type ENUM('succes','avertissement','erreur','statut_dossier','document_valide','document_rejete','info') DEFAULT 'info'`,
+  `ALTER TABLE notifications MODIFY COLUMN type ENUM('succes','avertissement','erreur','statut_dossier','document_valide','document_rejete','info','message') DEFAULT 'info'`,
   `UPDATE notifications SET type='statut_dossier' WHERE type IN ('succes','avertissement','erreur')`,
-  `ALTER TABLE notifications MODIFY COLUMN type ENUM('statut_dossier','document_valide','document_rejete','info') DEFAULT 'info'`,
+  `ALTER TABLE notifications MODIFY COLUMN type ENUM('statut_dossier','document_valide','document_rejete','info','message') DEFAULT 'info'`,
+  `ALTER TABLE notifications MODIFY COLUMN type ENUM('statut_dossier','document_valide','document_rejete','info','message') DEFAULT 'info'`,
+  `ALTER TABLE utilisateurs ADD COLUMN fcm_token VARCHAR(255) NULL`,
+  `ALTER TABLE utilisateurs MODIFY COLUMN telephone VARCHAR(20) NULL`,
+  `ALTER TABLE cours MODIFY COLUMN agence_id INT NULL`,
+  `ALTER TABLE cours ADD COLUMN cover_path VARCHAR(255) NULL`,
+  `ALTER TABLE cours ADD COLUMN fichier_path VARCHAR(255) NULL`,
+  `ALTER TABLE cours ADD COLUMN fichier_nom VARCHAR(255) NULL`,
+  `ALTER TABLE cours ADD COLUMN fichier_taille INT NULL`,
+  `ALTER TABLE cours ADD COLUMN nb_pages SMALLINT UNSIGNED NULL`,
+  `ALTER TABLE cours ADD COLUMN contenu MEDIUMTEXT NULL`,
+  `ALTER TABLE cours ADD COLUMN audio_path VARCHAR(255) NULL`,
+  `ALTER TABLE cours ADD COLUMN audio_nom VARCHAR(255) NULL`,
+  `ALTER TABLE dossiers ADD COLUMN qr_token VARCHAR(64) NULL`,
+  `ALTER TABLE dossiers ADD UNIQUE KEY uq_dossier_qr_token (qr_token)`,
 ];
 
 const tables = [
@@ -71,7 +99,7 @@ const tables = [
 )`,
 `CREATE TABLE IF NOT EXISTS notifications (
  id INT AUTO_INCREMENT PRIMARY KEY, destinataire_id INT NOT NULL, titre VARCHAR(200) NOT NULL, corps TEXT NOT NULL,
- type ENUM('statut_dossier','document_valide','document_rejete','info') DEFAULT 'info', est_lue BOOLEAN NOT NULL DEFAULT FALSE,
+ type ENUM('statut_dossier','document_valide','document_rejete','info','message') DEFAULT 'info', est_lue BOOLEAN NOT NULL DEFAULT FALSE,
  lue_le TIMESTAMP NULL, cree_le TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (destinataire_id) REFERENCES utilisateurs(id) ON DELETE CASCADE
 )`,
 `CREATE TABLE IF NOT EXISTS historique_statuts (
@@ -110,6 +138,10 @@ const tables = [
  FOREIGN KEY (groupe_id) REFERENCES groupes_pelerins(id) ON DELETE CASCADE,
  FOREIGN KEY (pelerin_id) REFERENCES utilisateurs(id) ON DELETE CASCADE
 )`,
+`CREATE TABLE IF NOT EXISTS groupe_lectures (
+ groupe_id INT NOT NULL, utilisateur_id INT NOT NULL, dernier_id INT NOT NULL DEFAULT 0, PRIMARY KEY (groupe_id, utilisateur_id),
+ FOREIGN KEY (groupe_id) REFERENCES groupes_pelerins(id) ON DELETE CASCADE, FOREIGN KEY (utilisateur_id) REFERENCES utilisateurs(id) ON DELETE CASCADE
+)`,
 `CREATE TABLE IF NOT EXISTS messages_groupes (
  id INT AUTO_INCREMENT PRIMARY KEY, groupe_id INT NOT NULL, expediteur_id INT NOT NULL,
  contenu TEXT, media_url VARCHAR(500), media_nom VARCHAR(255), media_type VARCHAR(100), media_taille INT,
@@ -117,5 +149,112 @@ const tables = [
  FOREIGN KEY (groupe_id) REFERENCES groupes_pelerins(id) ON DELETE CASCADE,
  FOREIGN KEY (expediteur_id) REFERENCES utilisateurs(id) ON DELETE CASCADE,
  CHECK (contenu IS NOT NULL OR media_url IS NOT NULL)
+)`,
+`CREATE TABLE IF NOT EXISTS voyages (
+ id INT AUTO_INCREMENT PRIMARY KEY, agence_id INT NOT NULL, saison_id INT NULL, nom VARCHAR(150) NOT NULL,
+ date_depart DATE NULL, date_retour DATE NULL, description TEXT,
+ statut ENUM('PLANNED','ONGOING','COMPLETED','CANCELLED') NOT NULL DEFAULT 'PLANNED',
+ cree_le TIMESTAMP DEFAULT CURRENT_TIMESTAMP, mis_a_jour_le TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+ FOREIGN KEY (agence_id) REFERENCES agences(id) ON DELETE CASCADE, FOREIGN KEY (saison_id) REFERENCES saisons_hajj(id) ON DELETE SET NULL
+)`,
+`CREATE TABLE IF NOT EXISTS vols (
+ id INT AUTO_INCREMENT PRIMARY KEY, voyage_id INT NOT NULL, numero_vol VARCHAR(20) NOT NULL, compagnie VARCHAR(100),
+ aeroport_depart VARCHAR(100) NOT NULL, aeroport_arrivee VARCHAR(100) NOT NULL, depart_le DATETIME NOT NULL, arrivee_le DATETIME NOT NULL,
+ terminal VARCHAR(30), statut ENUM('SCHEDULED','DELAYED','DEPARTED','ARRIVED','CANCELLED') NOT NULL DEFAULT 'SCHEDULED',
+ cree_le TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (voyage_id) REFERENCES voyages(id) ON DELETE CASCADE
+)`,
+`CREATE TABLE IF NOT EXISTS vol_groupes (
+ vol_id INT NOT NULL, groupe_id INT NOT NULL, PRIMARY KEY (vol_id, groupe_id),
+ FOREIGN KEY (vol_id) REFERENCES vols(id) ON DELETE CASCADE, FOREIGN KEY (groupe_id) REFERENCES groupes_pelerins(id) ON DELETE CASCADE
+)`,
+`CREATE TABLE IF NOT EXISTS hotels (
+ id INT AUTO_INCREMENT PRIMARY KEY, voyage_id INT NOT NULL, nom VARCHAR(150) NOT NULL, ville VARCHAR(100) NOT NULL,
+ adresse VARCHAR(255), telephone VARCHAR(30), check_in DATE NULL, check_out DATE NULL, cree_le TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+ FOREIGN KEY (voyage_id) REFERENCES voyages(id) ON DELETE CASCADE
+)`,
+`CREATE TABLE IF NOT EXISTS chambres (
+ id INT AUTO_INCREMENT PRIMARY KEY, hotel_id INT NOT NULL, numero VARCHAR(20) NOT NULL, capacite TINYINT UNSIGNED NOT NULL DEFAULT 2,
+ UNIQUE KEY uq_chambre_hotel (hotel_id, numero), FOREIGN KEY (hotel_id) REFERENCES hotels(id) ON DELETE CASCADE
+)`,
+`CREATE TABLE IF NOT EXISTS chambre_occupants (
+ chambre_id INT NOT NULL, pelerin_id INT NOT NULL, hotel_id INT NOT NULL, PRIMARY KEY (chambre_id, pelerin_id),
+ UNIQUE KEY uq_occupant_hotel (hotel_id, pelerin_id),
+ FOREIGN KEY (chambre_id) REFERENCES chambres(id) ON DELETE CASCADE, FOREIGN KEY (pelerin_id) REFERENCES utilisateurs(id) ON DELETE CASCADE
+)`,
+`CREATE TABLE IF NOT EXISTS vehicules (
+ id INT AUTO_INCREMENT PRIMARY KEY, agence_id INT NOT NULL, nom VARCHAR(100) NOT NULL, immatriculation VARCHAR(30),
+ capacite SMALLINT UNSIGNED NOT NULL DEFAULT 50, chauffeur_nom VARCHAR(120), chauffeur_telephone VARCHAR(30),
+ cree_le TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (agence_id) REFERENCES agences(id) ON DELETE CASCADE
+)`,
+`CREATE TABLE IF NOT EXISTS transports (
+ id INT AUTO_INCREMENT PRIMARY KEY, voyage_id INT NOT NULL, vehicule_id INT NULL, groupe_id INT NULL,
+ lieu_depart VARCHAR(150) NOT NULL, destination VARCHAR(150) NOT NULL, depart_le DATETIME NOT NULL, cree_le TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+ FOREIGN KEY (voyage_id) REFERENCES voyages(id) ON DELETE CASCADE, FOREIGN KEY (vehicule_id) REFERENCES vehicules(id) ON DELETE SET NULL,
+ FOREIGN KEY (groupe_id) REFERENCES groupes_pelerins(id) ON DELETE SET NULL
+)`,
+`CREATE TABLE IF NOT EXISTS programme_evenements (
+ id INT AUTO_INCREMENT PRIMARY KEY, voyage_id INT NOT NULL, groupe_id INT NULL, titre VARCHAR(200) NOT NULL,
+ type ENUM('FLIGHT','HOTEL','TRANSPORT','RITUAL','VISIT','OTHER') NOT NULL DEFAULT 'OTHER', lieu VARCHAR(150),
+ debut_le DATETIME NOT NULL, description TEXT, cree_le TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+ FOREIGN KEY (voyage_id) REFERENCES voyages(id) ON DELETE CASCADE, FOREIGN KEY (groupe_id) REFERENCES groupes_pelerins(id) ON DELETE SET NULL
+)`,
+`CREATE TABLE IF NOT EXISTS presences (
+ id INT AUTO_INCREMENT PRIMARY KEY, groupe_id INT NOT NULL, pelerin_id INT NOT NULL, guide_id INT NOT NULL,
+ type_evenement ENUM('PRESENT','ABSENT','TO_CHECK','BOARDING','TRANSPORT','ARRIVAL','ASSISTANCE') NOT NULL, lieu VARCHAR(150),
+ cree_le TIMESTAMP DEFAULT CURRENT_TIMESTAMP, KEY idx_presence_groupe (groupe_id, cree_le),
+ FOREIGN KEY (groupe_id) REFERENCES groupes_pelerins(id) ON DELETE CASCADE, FOREIGN KEY (pelerin_id) REFERENCES utilisateurs(id) ON DELETE CASCADE,
+ FOREIGN KEY (guide_id) REFERENCES utilisateurs(id) ON DELETE CASCADE
+)`,
+`CREATE TABLE IF NOT EXISTS scans_qr (
+ id INT AUTO_INCREMENT PRIMARY KEY, pelerin_id INT NOT NULL, scanne_par INT NOT NULL, motif VARCHAR(30) NOT NULL DEFAULT 'CONTROL',
+ lieu VARCHAR(150), cree_le TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+ FOREIGN KEY (pelerin_id) REFERENCES utilisateurs(id) ON DELETE CASCADE, FOREIGN KEY (scanne_par) REFERENCES utilisateurs(id) ON DELETE CASCADE
+)`,
+`CREATE TABLE IF NOT EXISTS incidents (
+ id INT AUTO_INCREMENT PRIMARY KEY, agence_id INT NOT NULL, groupe_id INT NOT NULL, pelerin_id INT NULL, signale_par INT NOT NULL,
+ categorie ENUM('MEDICAL','LOST_PERSON','TRANSPORT','DOCUMENT','ACCOMMODATION','SECURITY','OTHER') NOT NULL DEFAULT 'OTHER',
+ description TEXT NOT NULL, priorite ENUM('LOW','MEDIUM','HIGH','URGENT') NOT NULL DEFAULT 'MEDIUM',
+ statut ENUM('OPEN','IN_PROGRESS','RESOLVED','CLOSED') NOT NULL DEFAULT 'OPEN',
+ cree_le TIMESTAMP DEFAULT CURRENT_TIMESTAMP, resolu_le TIMESTAMP NULL,
+ FOREIGN KEY (agence_id) REFERENCES agences(id) ON DELETE CASCADE, FOREIGN KEY (groupe_id) REFERENCES groupes_pelerins(id) ON DELETE CASCADE,
+ FOREIGN KEY (pelerin_id) REFERENCES utilisateurs(id) ON DELETE SET NULL, FOREIGN KEY (signale_par) REFERENCES utilisateurs(id) ON DELETE CASCADE
+)`,
+`CREATE TABLE IF NOT EXISTS journal_audit (
+ id BIGINT AUTO_INCREMENT PRIMARY KEY, utilisateur_id INT NULL, action VARCHAR(60) NOT NULL, entite VARCHAR(60) NOT NULL,
+ entite_id VARCHAR(40), details JSON NULL, ip VARCHAR(64), cree_le TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+ KEY idx_audit_entite (entite, entite_id), KEY idx_audit_user (utilisateur_id, cree_le)
+)`,
+`CREATE TABLE IF NOT EXISTS cours (
+ id INT AUTO_INCREMENT PRIMARY KEY, agence_id INT NOT NULL, encadreur_id INT NOT NULL, groupe_id INT NULL, titre VARCHAR(200) NOT NULL,
+ description TEXT, categorie ENUM('RITUALS','HEALTH','LANGUAGE','LOGISTICS','OTHER') NOT NULL DEFAULT 'OTHER',
+ debut_le DATETIME NOT NULL, duree_minutes SMALLINT UNSIGNED NOT NULL DEFAULT 60, lieu VARCHAR(200), lien_visio VARCHAR(500), support_url VARCHAR(500),
+ statut ENUM('DRAFT','PUBLISHED','CANCELLED') NOT NULL DEFAULT 'DRAFT', cree_le TIMESTAMP DEFAULT CURRENT_TIMESTAMP, mis_a_jour_le TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+ KEY idx_cours_agence (agence_id, debut_le), KEY idx_cours_encadreur (encadreur_id),
+ FOREIGN KEY (agence_id) REFERENCES agences(id) ON DELETE CASCADE, FOREIGN KEY (encadreur_id) REFERENCES utilisateurs(id) ON DELETE CASCADE,
+ FOREIGN KEY (groupe_id) REFERENCES groupes_pelerins(id) ON DELETE SET NULL
+)`,
+`CREATE TABLE IF NOT EXISTS cours_inscriptions (
+ cours_id INT NOT NULL, pelerin_id INT NOT NULL, cree_le TIMESTAMP DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (cours_id, pelerin_id),
+ FOREIGN KEY (cours_id) REFERENCES cours(id) ON DELETE CASCADE, FOREIGN KEY (pelerin_id) REFERENCES utilisateurs(id) ON DELETE CASCADE
+)`,
+`CREATE TABLE IF NOT EXISTS cours_favoris (
+ cours_id INT NOT NULL, utilisateur_id INT NOT NULL, cree_le TIMESTAMP DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (cours_id, utilisateur_id),
+ FOREIGN KEY (cours_id) REFERENCES cours(id) ON DELETE CASCADE, FOREIGN KEY (utilisateur_id) REFERENCES utilisateurs(id) ON DELETE CASCADE
+)`,
+`CREATE TABLE IF NOT EXISTS actualites (
+ id INT AUTO_INCREMENT PRIMARY KEY, auteur_id INT NOT NULL, agence_id INT NULL, titre VARCHAR(200) NOT NULL, contenu TEXT,
+ categorie ENUM('NEWS','GUIDANCE','HEALTH','TRAVEL','OTHER') NOT NULL DEFAULT 'NEWS', media_type ENUM('NONE','IMAGE','VIDEO') NOT NULL DEFAULT 'NONE', media_path VARCHAR(255) NULL,
+ statut ENUM('PUBLISHED','HIDDEN') NOT NULL DEFAULT 'PUBLISHED', cree_le TIMESTAMP DEFAULT CURRENT_TIMESTAMP, KEY idx_actualites (statut, cree_le),
+ FOREIGN KEY (auteur_id) REFERENCES utilisateurs(id) ON DELETE CASCADE, FOREIGN KEY (agence_id) REFERENCES agences(id) ON DELETE CASCADE
+)`,
+`CREATE TABLE IF NOT EXISTS actualites_likes (
+ actualite_id INT NOT NULL, utilisateur_id INT NOT NULL, cree_le TIMESTAMP DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (actualite_id, utilisateur_id),
+ FOREIGN KEY (actualite_id) REFERENCES actualites(id) ON DELETE CASCADE, FOREIGN KEY (utilisateur_id) REFERENCES utilisateurs(id) ON DELETE CASCADE
+)`,
+`CREATE TABLE IF NOT EXISTS lieux (
+ id INT AUTO_INCREMENT PRIMARY KEY, agence_id INT NULL, nom VARCHAR(150) NOT NULL,
+ type ENUM('HOTEL','HOLY_SITE','MEETING','HOSPITAL','AIRPORT','OTHER') NOT NULL DEFAULT 'OTHER', latitude DECIMAL(9,6) NOT NULL, longitude DECIMAL(9,6) NOT NULL,
+ adresse VARCHAR(255), description TEXT, cree_le TIMESTAMP DEFAULT CURRENT_TIMESTAMP, KEY idx_lieux_agence (agence_id),
+ FOREIGN KEY (agence_id) REFERENCES agences(id) ON DELETE CASCADE
 )`];
-(async()=>{try{for(const sql of tables){await pool.execute(sql);console.log('✅',sql.match(/CREATE TABLE IF NOT EXISTS (\w+)/)[1]);} for(const sql of compatibility){try{await pool.execute(sql)}catch(e){if(!/Duplicate column|already exists|doesn't exist/.test(e.message)) throw e;}} console.log('🎉 Migration terminée');}catch(e){console.error('❌ Migration:',e.message);process.exitCode=1;}finally{await pool.end();}})();
+(async()=>{try{for(const sql of tables){await pool.execute(sql);console.log('✅',sql.match(/CREATE TABLE IF NOT EXISTS (\w+)/)[1]);} for(const sql of compatibility){try{await pool.execute(sql)}catch(e){if(!/Duplicate column|Duplicate key name|already exists|doesn't exist/.test(e.message)) throw e;}} console.log('🎉 Migration terminée');}catch(e){console.error('❌ Migration:',e.message);process.exitCode=1;}finally{await pool.end();}})();

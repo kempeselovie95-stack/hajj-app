@@ -13,11 +13,29 @@
       "bundleIdentifier": "com.myhajj237.app",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
+      },
+      "splash": {
+        "image": "./assets/splash.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#0B5D4C"
       }
     },
     "extra": {
       "eas": {
         "projectId": "7553bfca-516a-4993-942d-81c6d6b64578"
+      }
+    },
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0B5D4C"
+    },
+    "android": {
+      "package": "com.myhajj237.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0B5D4C"
       }
     }
   }

@@ -11,7 +11,7 @@
  * (jamais dominant), fond ivoire chaud, typo manuscrite pour les titres.
  */
 
-export const COLORS = Object.freeze({
+export const LIGHT_COLORS = Object.freeze({
   // Marque
   primary: '#0B5D4C',        // vert émeraude profond — actions principales, marque
   primaryHover: '#0E7561',
@@ -43,6 +43,38 @@ export const COLORS = Object.freeze({
   neutral: '#8A9089',
   neutralTint: '#EEEDE8',
 });
+
+/** Palette sombre (mêmes clés). */
+export const DARK_COLORS = Object.freeze({
+  primary: '#1E9E83',
+  primaryHover: '#27B596',
+  primaryTint: '#16342C',
+  accent: '#D9AE55',
+  accentTint: '#3A3220',
+  background: '#0D1411',
+  surface: '#151E1A',
+  surfaceMuted: '#1D2823',
+  border: '#2B3A33',
+  textPrimary: '#E8EFEA',
+  textSecondary: '#9FB2A8',
+  textOnPrimary: '#0D1411',
+  success: '#3DBB88',
+  successTint: '#14312A',
+  warning: '#D9AE55',
+  warningTint: '#3A3220',
+  danger: '#E26F5D',
+  dangerTint: '#3B1F1B',
+  info: '#5BA8CC',
+  infoTint: '#172C38',
+  neutral: '#9AA39B',
+  neutralTint: '#232A26',
+});
+
+/**
+ * Palette courante. Objet MODIFIABLE : le mobile y applique la palette sombre au démarrage
+ * (avant le chargement des écrans) ; le web, lui, passe par des variables CSS (LIGHT_COLORS / DARK_COLORS).
+ */
+export const COLORS = { ...LIGHT_COLORS };
 
 export const TYPOGRAPHY = Object.freeze({
   // Web : familles chargées via Google Fonts (voir web/index.html)

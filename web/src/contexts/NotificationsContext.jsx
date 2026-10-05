@@ -1,10 +1,12 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { useAuth } from './AuthContext.jsx';
+import { useDataSync } from './DataSyncContext.jsx';
 
 const NotificationsContext = createContext(null);
 
 export function NotificationsProvider({ children }) {
   const { api, isAuthenticated } = useAuth();
+  const { version } = useDataSync();
   const [notifications, setNotifications] = useState([]);
   const [unreadTotal, setUnreadTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -18,7 +20,6 @@ export function NotificationsProvider({ children }) {
       return () => { mounted = false; };
     }
 
-    setIsLoading(true);
     const loadNotifications = () => api.notifications.list()
       .then((data) => {
         if (!mounted) return;
@@ -33,10 +34,8 @@ export function NotificationsProvider({ children }) {
       });
 
     loadNotifications();
-    const interval = window.setInterval(loadNotifications, 15000);
-
-    return () => { mounted = false; window.clearInterval(interval); };
-  }, [api, isAuthenticated]);
+    return () => { mounted = false; };
+  }, [api, isAuthenticated, version]);
 
   const unreadCount = unreadTotal;
 

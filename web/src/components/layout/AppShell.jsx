@@ -3,76 +3,97 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 import { NotificationsProvider, useNotifications } from '../../contexts/NotificationsContext.jsx';
 import { useLanguage } from '../../contexts/LanguageContext.jsx';
+import LanguageSelector from '../common/LanguageSelector.jsx';
+import { useTheme } from '../../contexts/ThemeContext.jsx';
+import AssistantFab from '../assistant/AssistantFab.jsx';
+import NotificationToasts from '../common/NotificationToasts.jsx';
+import { useDataSync } from '../../contexts/DataSyncContext.jsx';
 
 const NAV_GROUPS = {
   pelerin: [
     {
-      title: 'PRINCIPAL',
+      titleKey: 'nav_main',
       links: [
-        { to: '/dashboard', key: 'dashboard', label: 'Tableau de bord' },
-        { to: '/pelerin/profile', key: 'profile', label: 'Mon compte' },
+        { to: '/dashboard', key: 'dashboard' },
+        { to: '/pelerin/dossier', key: 'dossier' },
+        { to: '/pelerin/voyage', key: 'travel' },
+        { to: '/pelerin/cours', key: 'courses' },
+        { to: '/pelerin/groupe', key: 'groups' },
+        { to: '/pelerin/profile', key: 'settings' },
       ],
     },
   ],
   admin: [
     {
-      title: 'PRINCIPAL',
+      titleKey: 'nav_main',
       links: [
-        { to: '/admin/dashboard', key: 'dashboard', label: 'Tableau de bord' },
-        { to: '/admin/pelerins', key: 'pilgrims', label: 'Pèlerins' },
-        { to: '/admin/paiements', key: 'payments', label: 'Paiements' },
-        { to: '/admin/documents', key: 'documents', label: 'Documents' },
+        { to: '/admin/dashboard', key: 'dashboard' },
+        { to: '/admin/pelerins', key: 'pilgrims' },
+        { to: '/admin/paiements', key: 'payments' },
+        { to: '/admin/dossiers', key: 'dossiers' },
+        { to: '/admin/documents', key: 'documents' },
       ],
     },
     {
-      title: 'OPÉRATIONS',
+      titleKey: 'nav_operations',
       links: [
-        { to: '/admin/encadreurs', key: 'guides', label: 'Guides' },
-        { to: '/admin/voyages', key: 'travel', label: 'Voyages' },
+        { to: '/admin/groupes', key: 'groups' },
+        { to: '/admin/encadreurs', key: 'guides' },
+        { to: '/admin/operations', key: 'operations' },
+        { to: '/admin/voyages', key: 'travel' },
+        { to: '/admin/cours', key: 'courses' },
       ],
     },
     {
-      title: 'COMMUNICATION',
+      titleKey: 'nav_communication',
       links: [
-        { to: '/admin/presence', key: 'presence', label: 'QR & Présence' },
+        { to: '/admin/presence', key: 'presence' },
+        { to: '/admin/actualites', key: 'news' },
       ],
     },
-    { title: 'ANALYTIQUE', links: [{ to: '/admin/statistiques', key: 'statistics', label: 'Statistiques' }] },
-    { title: 'ORGANISATION', links: [{ to: '/admin/organisations', key: 'organisation', label: 'Organisation' }] },
-    { title: 'SYSTÈME', links: [{ to: '/admin/parametres', key: 'settings', label: 'Paramètres' }] },
+    { titleKey: 'nav_organisation', links: [{ to: '/admin/organisations', key: 'organisation' }] },
+    { titleKey: 'nav_system', links: [{ to: '/admin/parametres', key: 'settings' }] },
   ],
   agence: [
     {
-      title: 'PRINCIPAL',
+      titleKey: 'nav_main',
       links: [
-        { to: '/agence/dashboard', key: 'dashboard', label: 'Tableau de bord' },
-        { to: '/agence/pelerins', key: 'pilgrims', label: 'Pèlerins' },
-        { to: '/agence/paiements', key: 'payments', label: 'Paiements' },
-        { to: '/agence/documents', key: 'documents', label: 'Documents' },
+        { to: '/agence/dashboard', key: 'dashboard' },
+        { to: '/agence/pelerins', key: 'pilgrims' },
+        { to: '/agence/paiements', key: 'payments' },
+        { to: '/agence/dossiers', key: 'dossiers' },
+        { to: '/agence/documents', key: 'documents' },
       ],
     },
     {
-      title: 'OPÉRATIONS',
+      titleKey: 'nav_operations',
       links: [
-        { to: '/agence/guides', key: 'guides', label: 'Guides' },
-        { to: '/agence/voyages', key: 'travel', label: 'Voyages' },
+        { to: '/agence/groupes', key: 'groups' },
+        { to: '/agence/guides', key: 'guides' },
+        { to: '/agence/voyages', key: 'travel' },
+        { to: '/agence/cours', key: 'courses' },
       ],
     },
     {
-      title: 'COMMUNICATION',
+      titleKey: 'nav_communication',
       links: [
-        { to: '/agence/presence', key: 'presence', label: 'QR & Présence' },
+        { to: '/agence/presence', key: 'presence' },
+        { to: '/agence/actualites', key: 'news' },
       ],
     },
+    { titleKey: 'nav_system', links: [{ to: '/agence/profile', key: 'settings' }] },
   ],
   encadreur: [
     {
-      title: 'PRINCIPAL',
+      titleKey: 'nav_main',
       links: [
-        { to: '/encadreur/dashboard', key: 'dashboard', label: 'Tableau de bord' },
-        { to: '/encadreur/groupes', key: 'groups', label: 'Groupes', end: false },
+        { to: '/encadreur/dashboard', key: 'dashboard' },
+        { to: '/encadreur/groupes', key: 'groups', end: false },
+        { to: '/encadreur/presence', key: 'presence' },
+        { to: '/encadreur/cours', key: 'courses' },
       ],
     },
+    { titleKey: 'nav_system', links: [{ to: '/encadreur/profile', key: 'settings' }] },
   ],
 };
 
@@ -117,6 +138,20 @@ function Icon({ name, isActive }) {
         <circle cx="17" cy="9" r="2.5" />
         <path d="M3.5 18a5.5 5.5 0 0 1 11 0" />
         <path d="M12.5 18a5 5 0 0 1 7.5-4.5" />
+      </svg>
+    ),
+    dossier: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={base} style={{ color }}>
+        <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7z" />
+        <path d="M14 3v4h4" />
+        <path d="m9 14 2 2 4-4" />
+      </svg>
+    ),
+    courses: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={base} style={{ color }}>
+        <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z" />
+        <path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5" />
+        <path d="M9 8h7" />
       </svg>
     ),
     guides: (
@@ -169,7 +204,9 @@ function AppShellContent() {
   const { user, logout, api } = useAuth();
   const { t } = useLanguage();
   const { unreadCount } = useNotifications();
+  const { version } = useDataSync();
   const navigate = useNavigate();
+  const { mode: themeMode, toggle: toggleTheme } = useTheme();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [menuBadges, setMenuBadges] = useState({ pilgrims: 0, documents: 0 });
   const groups = NAV_GROUPS[user?.role] ?? [];
@@ -198,44 +235,44 @@ function AppShellContent() {
     async function refreshBadges() {
       try {
         const result = await api.dashboard.sidebarBadges();
-        if (active) setMenuBadges(result.badges || { pilgrims: 0, documents: 0 });
+        const unread = await api.groups.unread().catch(() => ({ total: 0 }));
+        if (active) setMenuBadges({ ...(result.badges || { pilgrims: 0, documents: 0 }), groups: unread.total });
       } catch {
         if (active) setMenuBadges({ pilgrims: 0, documents: 0 });
       }
     }
     refreshBadges();
-    const interval = window.setInterval(refreshBadges, 30000);
-    return () => { active = false; window.clearInterval(interval); };
-  }, [api, user?.id, user?.role]);
+    return () => { active = false; };
+  }, [api, user?.id, user?.role, version]);
 
   return (
     <div className="h-dvh overflow-hidden bg-[#edf1f4] text-slate-800">
-      {mobileNavOpen && <button type="button" aria-label="Fermer le menu" onClick={() => setMobileNavOpen(false)} className="fixed inset-0 z-40 bg-slate-950/35 md:hidden" />}
+      {mobileNavOpen && <button type="button" aria-label={t('nav_closeMenu')} onClick={() => setMobileNavOpen(false)} className="fixed inset-0 z-40 bg-slate-950/35 md:hidden" />}
       <div className="flex h-dvh min-w-0">
-        <aside className={`fixed inset-y-0 left-0 z-50 flex h-dvh w-[min(84vw,260px)] shrink-0 flex-col border-r border-[#dde3e8] bg-[#f5f7f6] transition-transform md:sticky md:top-0 md:z-20 md:w-[260px] md:translate-x-0 ${mobileNavOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <aside className={`fixed inset-y-0 start-0 z-50 flex h-dvh w-[min(84vw,260px)] shrink-0 flex-col border-e border-[#dde3e8] bg-[#f5f7f6] transition-transform md:sticky md:top-0 md:z-20 md:w-[260px] md:ltr:translate-x-0 md:rtl:translate-x-0 ${mobileNavOpen ? 'translate-x-0' : 'ltr:-translate-x-full rtl:translate-x-full'}`}>
           <div className="flex h-[96px] shrink-0 items-center gap-3 border-b border-[#e4e8ec] px-5">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#edf4f1] text-[10px] font-bold text-[#1f2d2a] ring-1 ring-[#dfe8e5] shadow-sm">
               HF
             </div>
             <div className="leading-tight">
               <div className="text-[18px] font-semibold tracking-[-0.04em] text-[#2b2d2f]">MyHajj237</div>
-              <div className="text-[9px] tracking-[0.2em] text-slate-400">CAMEROUN</div>
+              <div className="text-[9px] tracking-[0.2em] text-slate-400">{t('nav_country')}</div>
             </div>
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-4 [scrollbar-color:#cbd5e1_transparent] [scrollbar-width:thin]">
             <div className="mb-5 flex items-center gap-2 rounded-lg bg-[#eaf6f1] px-3 py-2 text-[13px] font-medium text-[#2b7b66] ring-1 ring-[#cfe6dc]">
               <span className="h-2.5 w-2.5 rounded-full bg-[#2f8e6f]" />
-              Hajj 2027 - Actif
+              {t('nav_seasonActive')}
             </div>
 
             {groups.map((group) => (
-              <div key={group.title} className="mb-5">
-                <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">{group.title}</p>
+              <div key={group.titleKey} className="mb-5">
+                <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">{t(group.titleKey)}</p>
                 <nav className="space-y-1">
                   {group.links.map((link) => (
                     <NavLink
-                      key={`${group.title}-${link.key}`}
+                      key={`${group.titleKey}-${link.key}`}
                       to={link.to}
                       end={link.end ?? true}
                       onClick={() => setMobileNavOpen(false)}
@@ -249,13 +286,13 @@ function AppShellContent() {
                     >
                       {({ isActive }) => (
                         <>
-                          <span className="mr-3 inline-flex h-4 w-4 items-center justify-center">
+                          <span className="me-3 inline-flex h-4 w-4 items-center justify-center">
                             <Icon name={link.key} isActive={isActive} />
                           </span>
-                          <span className="leading-none">{link.label || t(link.key)}</span>
+                          <span className="leading-none">{t(link.key)}</span>
                           {menuBadges[link.key] > 0 && (
                             <span
-                              className={`ml-auto inline-flex min-w-[20px] items-center justify-center rounded-full px-1.5 py-[2px] text-[10px] font-semibold ${
+                              className={`ms-auto inline-flex min-w-[20px] items-center justify-center rounded-full px-1.5 py-[2px] text-[10px] font-semibold ${
                                 isActive ? 'bg-white/15 text-white' : 'bg-[#f0c875] text-[#725d24]'
                               }`}
                             >
@@ -277,8 +314,8 @@ function AppShellContent() {
               <button
                 type="button"
                 onClick={() => navigate(profileRoute)}
-                className="min-w-0 flex-1 text-left leading-tight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0d8a6f]"
-                aria-label="Ouvrir la gestion du compte"
+                className="min-w-0 flex-1 text-start leading-tight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0d8a6f]"
+                aria-label={t('nav_openAccount')}
               >
                 <span className="block truncate text-[14px] font-semibold text-slate-700">{user?.prenom || 'Ibrahim'} {user?.nom || 'Amadou'}</span>
                 <span className="block truncate text-[11px] text-slate-500">{roleLabel}</span>
@@ -302,13 +339,17 @@ function AppShellContent() {
 
         <div className="flex h-dvh min-w-0 min-h-0 flex-1 flex-col bg-[#f3f5f8]">
           <div className="flex h-12 shrink-0 items-center border-b border-slate-200 px-3">
-            <button type="button" onClick={() => setMobileNavOpen(true)} aria-label="Ouvrir le menu" aria-expanded={mobileNavOpen} className="inline-flex h-9 w-9 items-center justify-center rounded-md text-slate-700 hover:bg-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 md:hidden">
+            <button type="button" onClick={() => setMobileNavOpen(true)} aria-label={t('nav_openMenu')} aria-expanded={mobileNavOpen} className="inline-flex h-9 w-9 items-center justify-center rounded-md text-slate-700 hover:bg-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 md:hidden">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
             </button>
-            <span className="ml-2 text-sm font-semibold text-slate-700 md:hidden">MyHajj237</span>
-            <Link to={notificationRoute} aria-label={`Notifications : ${unreadCount} non lue${unreadCount === 1 ? '' : 's'}`} title={`${unreadCount} notification${unreadCount === 1 ? '' : 's'} non lue${unreadCount === 1 ? '' : 's'}`} className="relative ml-auto inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700">
+            <span className="ms-2 text-sm font-semibold text-slate-700 md:hidden">MyHajj237</span>
+            <div className="ms-auto me-2 flex items-center gap-2">
+              <button type="button" onClick={toggleTheme} aria-label={themeMode === 'dark' ? t('theme_light') : t('theme_dark')} title={themeMode === 'dark' ? t('theme_light') : t('theme_dark')} className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-lg text-slate-500 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700">{themeMode === 'dark' ? '☀️' : '🌙'}</button>
+              <LanguageSelector />
+            </div>
+            <Link to={notificationRoute} aria-label={t('nav_notificationsAria', { count: unreadCount })} title={t('nav_notificationsTitle', { count: unreadCount })} className="relative inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5" aria-hidden="true"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg>
-              {unreadCount > 0 && <span className="absolute -right-1 -top-1 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-[#f3f5f8]">{unreadCount > 99 ? '99+' : unreadCount}</span>}
+              {unreadCount > 0 && <span className="absolute -end-1 -top-1 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-[#f3f5f8]">{unreadCount > 99 ? '99+' : unreadCount}</span>}
             </Link>
           </div>
           <main className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-3 py-4 sm:px-5">
@@ -316,6 +357,8 @@ function AppShellContent() {
           </main>
         </div>
       </div>
+      <NotificationToasts />
+      <AssistantFab />
     </div>
   );
 }

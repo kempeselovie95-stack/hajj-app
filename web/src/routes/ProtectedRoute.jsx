@@ -1,5 +1,6 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext.jsx';
+import { useLanguage } from '../contexts/LanguageContext.jsx';
 
 /**
  * Protège un sous-arbre de routes. Deux niveaux de contrôle :
@@ -13,12 +14,13 @@ import { useAuth } from '../contexts/AuthContext.jsx';
 export default function ProtectedRoute({ allowedRoles }) {
   const { isAuthenticated, isLoading, user, homeRoute } = useAuth();
   const location = useLocation();
+  const { t } = useLanguage();
 
   if (isLoading) {
     // Évite un flash de redirection pendant la vérification de session
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
-        <p className="font-body text-text-secondary">Chargement…</p>
+        <p className="font-body text-text-secondary">{t('loading')}</p>
       </div>
     );
   }

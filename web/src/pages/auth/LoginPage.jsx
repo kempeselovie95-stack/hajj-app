@@ -4,6 +4,7 @@ import { validateLoginForm, isFormValid } from '@hajj/shared';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 import FormField from '../../components/common/FormField.jsx';
 import GeometricPattern from '../../components/common/GeometricPattern.jsx';
+import GoogleButton from '../../components/common/GoogleButton.jsx';
 import LanguageSelector from '../../components/common/LanguageSelector.jsx';
 import { useLanguage } from '../../contexts/LanguageContext.jsx';
 
@@ -63,6 +64,7 @@ export default function LoginPage() {
         </div>
 
         <form onSubmit={handleSubmit} noValidate className="card space-y-5">
+          {location.state?.notice && <div role="status" className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{location.state.notice}</div>}
           {serverError && (
             <div
               role="alert"
@@ -96,9 +98,14 @@ export default function LoginPage() {
             required
           />
 
+          <div className="-mt-2 text-end">
+            <Link to="/forgot-password" className="text-sm font-medium text-primary hover:text-primary-hover">{t('forgotPassword')}</Link>
+          </div>
+
           <button type="submit" disabled={isSubmitting} className="btn-primary w-full">
             {isSubmitting ? t('signingIn') : t('signIn')}
           </button>
+          <GoogleButton onSuccess={() => navigate('/', { replace: true })} onError={(message) => setServerError(message)} />
         </form>
 
         <p className="mt-6 text-center font-body text-sm text-text-secondary">

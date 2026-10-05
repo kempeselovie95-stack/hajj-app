@@ -1,39 +1,60 @@
-import { View, Text, FlatList, StyleSheet, Pressable } from 'react-native';
+import { useState } from 'react';
+import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { THEME } from '@hajj/shared';
-import { FONTS } from '../../hooks/useAppFonts.js';
 import { useNotifications } from '../../contexts/NotificationsContext.jsx';
+import { useLanguage } from '../../i18n/LanguageContext.jsx';
+import { useDataSync } from '../../sync/DataSyncContext.jsx';
+import { FONTS } from '../../hooks/useAppFonts.js';
 import NotificationCard from '../../components/NotificationCard.jsx';
+import SwipeRow from '../../ui/SwipeRow.jsx';
+import { useConfirm } from '../../ui/ConfirmContext.jsx';
+import { Banner, Chips } from '../../ui/index.jsx';
 
 export default function NotificationsScreen() {
-  const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
+  const { notifications, unreadCount, markAsRead, markAllAsRead, removeNotification } = useNotifications();
+  const { t } = useLanguage();
+  const { bump } = useDataSync();
+  const confirm = useConfirm();
+  const [filter, setFilter] = useState('all');
+  const [refreshing, setRefreshing] = useState(false);
+  const [failure, setFailure] = useState('');
+  const data = filter === 'unread' ? notifications.filter((item) => !item.lue) : notifications;
+
+  // Glisser vers la gauche → bouton rouge → fenêtre de confirmation → suppression.
+  async function askDelete(item, closeRow) {
+    const accepted = await confirm({ title: t('nt_deleteTitle'), message: t('nt_deleteText'), confirmLabel: t('nt_delete'), danger: true });
+    if (!accepted) { closeRow(); return; }
+    setFailure('');
+    try { await removeNotification(item.id); } catch { setFailure(t('nt_deleteError')); closeRow(); }
+  }
 
   return (
     <View style={styles.flex}>
       <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>Notifications</Text>
-          <Text style={styles.subtitle}>
-            {unreadCount > 0 ? `${unreadCount} non lue${unreadCount > 1 ? 's' : ''}` : 'Tout est à jour'}
-          </Text>
+        <View style={styles.flex}>
+          <Text style={styles.title}>{t('notificationsTitle')}</Text>
+          <Text style={styles.subtitle}>{unreadCount > 0 ? t('unreadCount', { count: unreadCount }) : t('allCaughtUp')}</Text>
         </View>
-        {unreadCount > 0 && (
-          <Pressable onPress={markAllAsRead}>
-            <Text style={styles.markAllText}>Tout marquer comme lu</Text>
-          </Pressable>
-        )}
+        {unreadCount > 0 ? <Pressable onPress={markAllAsRead}><Text style={styles.markAll}>{t('markAllRead')}</Text></Pressable> : null}
       </View>
-
+      <View style={styles.filters}>
+        <Chips value={filter} onChange={setFilter} options={[{ value: 'all', label: t('allNotifications') }, { value: 'unread', label: t('unreadNotifications') }]} />
+        {notifications.length > 0 ? <Text style={styles.hint}>{t('nt_swipeHint')}</Text> : null}
+        <Banner>{failure}</Banner>
+      </View>
       <FlatList
-        data={notifications}
+        data={data}
         keyExtractor={(item) => String(item.id)}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={styles.list}
+        refreshing={refreshing}
+        onRefresh={() => { setRefreshing(true); bump(); setTimeout(() => setRefreshing(false), 800); }}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
         renderItem={({ item }) => (
-          <NotificationCard notification={item} onPress={() => markAsRead(item.id)} />
+          <SwipeRow actionLabel={t('nt_delete')} onAction={(closeRow) => askDelete(item, closeRow)}>
+            <NotificationCard notification={item} onPress={() => markAsRead(item.id)} />
+          </SwipeRow>
         )}
-        ListEmptyComponent={
-          <Text style={styles.emptyText}>Tu n'as pas encore de notification.</Text>
-        }
+        ListEmptyComponent={<Text style={styles.empty}>{filter === 'unread' ? t('np_noneUnread') : t('np_noneAll')}</Text>}
       />
     </View>
   );
@@ -41,36 +62,13 @@ export default function NotificationsScreen() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: THEME.colors.background },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    padding: THEME.spacing.lg,
-    paddingBottom: THEME.spacing.sm,
-  },
-  title: {
-    fontFamily: FONTS.displaySemibold,
-    fontSize: THEME.typography.sizes['2xl'],
-    color: THEME.colors.textPrimary,
-  },
-  subtitle: {
-    fontFamily: FONTS.bodyRegular,
-    fontSize: THEME.typography.sizes.sm,
-    color: THEME.colors.textSecondary,
-    marginTop: 2,
-  },
-  markAllText: {
-    fontFamily: FONTS.bodyMedium,
-    fontSize: THEME.typography.sizes.sm,
-    color: THEME.colors.primary,
-  },
-  listContent: { paddingHorizontal: THEME.spacing.md, paddingBottom: THEME.spacing.xl },
-  separator: { height: THEME.spacing.xs },
-  emptyText: {
-    fontFamily: FONTS.bodyRegular,
-    fontSize: THEME.typography.sizes.sm,
-    color: THEME.colors.textSecondary,
-    textAlign: 'center',
-    marginTop: THEME.spacing.xl,
-  },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: THEME.spacing.lg, paddingBottom: THEME.spacing.sm, gap: 12 },
+  title: { fontFamily: FONTS.displaySemibold, fontSize: THEME.typography.sizes['2xl'], color: THEME.colors.textPrimary },
+  subtitle: { fontFamily: FONTS.bodyRegular, fontSize: THEME.typography.sizes.sm, color: THEME.colors.textSecondary, marginTop: 2 },
+  markAll: { fontFamily: FONTS.bodySemibold, fontSize: THEME.typography.sizes.sm, color: THEME.colors.primary },
+  filters: { paddingHorizontal: THEME.spacing.lg, paddingBottom: THEME.spacing.sm, gap: 8 },
+  hint: { fontFamily: FONTS.bodyRegular, fontSize: 11, color: THEME.colors.textSecondary },
+  list: { paddingBottom: THEME.spacing.xl },
+  separator: { height: 1, backgroundColor: THEME.colors.border },
+  empty: { textAlign: 'center', padding: THEME.spacing.xl, fontFamily: FONTS.bodyRegular, color: THEME.colors.textSecondary },
 });
